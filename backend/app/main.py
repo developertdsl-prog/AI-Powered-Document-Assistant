@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health
+from app.api.routes import documents, health
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 
@@ -35,6 +35,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health.router, prefix=settings.api_prefix, tags=["health"])
+    app.include_router(documents.router, prefix=settings.api_prefix)
 
     @app.get("/", include_in_schema=False)
     def read_root() -> dict[str, str]:
