@@ -4,6 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import AppRouter from "@/AppRouter";
 
+vi.mock("@/services/documents", () => ({
+  listDocuments: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  uploadDocument: vi.fn(),
+}));
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
