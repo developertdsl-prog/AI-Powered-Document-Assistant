@@ -1,3 +1,4 @@
+import { HealthStatusCard } from "@/components/HealthStatusCard";
 import { Button, Card, CardBody, CardDescription, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import type { ConversationSummary, DocumentSummary, StatCard } from "@/types";
 import { FileText, MessageSquare, Upload } from "lucide-react";
@@ -98,6 +99,8 @@ export default function DashboardPage() {
           </Card>
         ))}
       </section>
+
+      <HealthStatusCard />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card>
