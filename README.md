@@ -13,7 +13,9 @@ This repository is built incrementally in six phases. The current state covers
 | 1.1 | Project setup and runnable frontend/backend | Complete |
 | 1.2 | Frontend layout, navigation, components, placeholder pages | Complete |
 | 1.3 | Backend configuration, PostgreSQL, models, migrations, API contracts | Complete |
-| 2 | Document ingestion (upload, validation, ownership, storage) | In progress |
+| 2.1 | Upload UI with drag-and-drop, progress, and status | Complete |
+| 2.2 | Upload API, validation, ownership, and storage | Complete |
+| 2.3 | Parsing, metadata, processing status, and error handling | Planned |
 | 3 | AI and retrieval pipeline | Planned |
 | 4 | User-facing AI features | Planned |
 | 5 | Security, testing, reliability | Planned |
@@ -199,3 +201,4 @@ Never commit a real `.env` file. Only `.env.example` files belong in Git.
 
 - [Architecture](docs/architecture.md)
 - [API contract](docs/api.md)
+- [Milestones](docs/milestones.md)

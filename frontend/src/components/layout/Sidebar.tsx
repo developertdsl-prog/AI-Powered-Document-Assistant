@@ -28,7 +28,7 @@ export function Sidebar() {
             AI Document Assistant
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Phase 1.2
+            Phase 2
           </p>
         </div>
       </div>
@@ -41,7 +41,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="border-t border-slate-200 px-6 py-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        Foundation UI with mock data
+        Document ingestion
       </div>
     </aside>
   );
