@@ -95,15 +95,97 @@ Reports API status and verifies the database with `SELECT 1`.
 reachable. The payload uses the same health schema, with `status` set to
 `degraded` and `database` set to `down`.
 
+### `POST /api/documents`
+
+Upload a `PDF`, `DOCX`, or `TXT` file via `multipart/form-data`. The request
+uses the form field `file`.
+
+**Validation and storage:**
+
+- Maximum size: `20 MB` (configurable with `MAX_UPLOAD_SIZE_MB`)
+- Allowed extensions: `pdf`, `docx`, `txt`
+- Content is sniffed by magic bytes (PDF header, ZIP structure for DOCX,
+  null-byte checks for text files). Extension alone is not trusted.
+- Files are stored under `uploads/{owner_id}/` with a generated name. The
+  `storage_path` is not exposed in responses.
+- A SHA-256 checksum is computed while streaming.
+- Documents are created with `status` set to `pending`. Parsing/extraction is
+  added in Phase 2.3.
+
+**200/201 response:**
+
+```json
+{
+  "id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "original_filename": "Quarterly Report.pdf",
+  "content_type": "application/pdf",
+  "file_size_bytes": 245186,
+  "checksum": "7f3e...",
+  "status": "pending",
+  "page_count": null,
+  "error_message": null,
+  "created_at": "2026-10-23T10:12:00Z",
+  "updated_at": "2026-10-23T10:12:00Z"
+}
+```
+
+**Errors:**
+
+| Status | Code | When |
+| --- | --- | --- |
+| 413 | `file_too_large` | File exceeds `MAX_UPLOAD_SIZE_MB` |
+| 415 | `unsupported_media_type` | Unsupported extension, mismatch between extension and content, or invalid file structure |
+| 422 | `validation_error` | Missing file, empty file, or path traversal resulted in an invalid filename |
+
+Until Phase 5 authentication, uploads are owned by the development user
+(`DEV_USER_EMAIL` / `DEV_USER_NAME`).
+
+### `GET /api/documents`
+
+List documents owned by the current user.
+
+**Query parameters:**
+
+| Name | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `limit` | integer | `50` | `1` to `100` |
+| `offset` | integer | `0` | `>= 0` |
+
+**200 OK:**
+
+```json
+{
+  "items": [
+    {
+      "id": "...",
+      "original_filename": "Notes.txt",
+      "content_type": "text/plain",
+      "file_size_bytes": 1245,
+      "checksum": "...",
+      "status": "pending",
+      "page_count": null,
+      "error_message": null,
+      "created_at": "...",
+      "updated_at": "..."
+    }
+  ],
+  "total": 1
+}
+```
+
+### `GET /api/documents/{id}`
+
+Get one document owned by the current user.
+
+**404 Not Found** when the document does not exist or belongs to another
+user. The response uses the standard error envelope.
+
 ## Planned endpoints
 
 These are contracts reserved for later phases and are **not implemented yet**.
 
 | Phase | Method | Path | Purpose |
 | --- | --- | --- | --- |
-| 2 | `POST` | `/api/documents` | Upload a PDF, DOCX, or TXT file |
-| 2 | `GET` | `/api/documents` | List the current user's documents |
-| 2 | `GET` | `/api/documents/{id}` | Document details and processing status |
 | 2 | `GET` | `/api/documents/{id}/text` | Extracted text with page metadata |
 | 2 | `DELETE` | `/api/documents/{id}` | Delete a document |
 | 4 | `POST` | `/api/documents/{id}/summaries` | Generate a summary |
@@ -143,6 +225,11 @@ Message `role` values: `user`, `assistant`, `system`.
 Deleting a user cascades to their documents and conversations. Deleting a
 document cascades to its chunks and conversations. Deleting a conversation
 cascades to its messages.
+
+`documents.storage_path` is stored relative to the configured upload directory
+and is not exposed to clients. `documents.checksum` is a SHA-256 hex digest
+computed at upload time. Upload ownership is enforced per user (currently the
+development user until Phase 5 authentication).
 
 ## Security notes
 

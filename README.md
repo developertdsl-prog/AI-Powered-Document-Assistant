@@ -13,7 +13,7 @@ This repository is built incrementally in six phases. The current state covers
 | 1.1 | Project setup and runnable frontend/backend | Complete |
 | 1.2 | Frontend layout, navigation, components, placeholder pages | Complete |
 | 1.3 | Backend configuration, PostgreSQL, models, migrations, API contracts | Complete |
-| 2 | Document ingestion | Planned |
+| 2 | Document ingestion (upload, validation, ownership, storage) | In progress |
 | 3 | AI and retrieval pipeline | Planned |
 | 4 | User-facing AI features | Planned |
 | 5 | Security, testing, reliability | Planned |
@@ -142,6 +142,13 @@ npm run test
 npm run build
 ```
 
+### Uploads
+
+- Stored files live under `backend/uploads/` by owner and are gitignored.
+- Supported types: `PDF`, `DOCX`, `TXT`. Validation inspects file content
+  (magic bytes/ZIP structure) in addition to the extension.
+- Uploads are owned by the development user until Phase 5 authentication.
+
 Migration commands:
 
 ```powershell
@@ -167,6 +174,11 @@ alembic current           # show the applied revision
 | `DB_ECHO` | `false` | Log SQL statements |
 | `DB_POOL_PRE_PING` | `true` | Validate pooled connections before use |
 | `DB_CONNECT_TIMEOUT_SECONDS` | `5` | PostgreSQL connect timeout |
+| `UPLOAD_DIR` | `uploads` | Directory for stored uploads (relative to the backend working directory) |
+| `MAX_UPLOAD_SIZE_MB` | `20` | Maximum upload size in megabytes |
+| `ALLOWED_FILE_TYPES` | `["pdf","docx","txt"]` | Allowed file extensions (JSON array) |
+| `DEV_USER_EMAIL` | `dev@local.test` | Development user email used until Phase 5 authentication |
+| `DEV_USER_NAME` | `Development User` | Display name for the development user |
 
 Never commit a real `.env` file. Only `.env.example` files belong in Git.
 

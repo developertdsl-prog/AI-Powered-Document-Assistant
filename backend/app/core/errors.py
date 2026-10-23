@@ -8,6 +8,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.exceptions import AppError
+
 logger = logging.getLogger(__name__)
 
 STATUS_CODES = {
@@ -50,6 +52,15 @@ def register_exception_handlers(app: FastAPI) -> None:
         code = STATUS_CODES.get(exc.status_code, "http_error")
         message = exc.detail if isinstance(exc.detail, str) else "Request failed"
         return error_response(exc.status_code, code, message)
+
+    @app.exception_handler(AppError)
+    async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+        return error_response(
+            exc.status_code,
+            exc.code,
+            exc.message,
+            exc.details,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(

@@ -33,10 +33,19 @@ class Settings(BaseSettings):
     db_echo: bool = False
     db_pool_pre_ping: bool = True
     db_connect_timeout_seconds: int = 5
+    upload_dir: str = "uploads"
+    max_upload_size_mb: int = 20
+    allowed_file_types: list[str] = ["pdf", "docx", "txt"]
+    dev_user_email: str = "dev@local.test"
+    dev_user_name: str = "Development User"
 
     @property
     def is_development(self) -> bool:
         return self.environment.lower() in {"development", "dev", "local"}
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return max(1, self.max_upload_size_mb) * 1024 * 1024
 
 
 @lru_cache
