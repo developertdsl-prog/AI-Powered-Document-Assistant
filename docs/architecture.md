@@ -30,7 +30,9 @@ FastAPI application
 | Schemas | `backend/app/schemas/` | Pydantic request/response models |
 | Services | `backend/app/services/` | Business logic, parsing, retrieval, AI calls |
 | Models | `backend/app/models/` | Persistence models |
-| Core | `backend/app/core/` | Configuration, logging, security, shared dependencies |
+| Database | `backend/app/db/` | Engine, session factory, declarative base |
+| Migrations | `backend/alembic/` | Versioned schema changes |
+| Core | `backend/app/core/` | Configuration, logging, security, error handling |
 
 Rules:
 
@@ -75,11 +77,30 @@ Phase 1.3.
 }
 ```
 
+## Database
+
+PostgreSQL is the only supported production database. SQLAlchemy 2.x is used
+with the synchronous `psycopg` driver (`postgresql+psycopg://`). The engine is
+created once in `backend/app/db/session.py` with `pool_pre_ping` enabled and a
+configurable connect timeout. Requests obtain sessions through the `get_db`
+dependency; sessions are always closed.
+
+Schema changes are versioned with Alembic (`backend/alembic/versions`). The
+initial migration creates `users`, `documents`, `document_chunks`,
+`conversations`, and `messages`. Migrations are the only supported way to change
+production schemas; `Base.metadata.create_all` is used in tests only.
+
+The test database can be SQLite in memory because the models use portable
+types (`Uuid`, `JSON`, `String`). The JSONB/pgvector-specific columns are
+introduced in Phase 3, together with PostgreSQL-only tests.
+
 ## Health checks
 
-`GET /api/health` reports the service status, version, and environment. From
-Phase 1.3 it also verifies database connectivity and returns `503` when the
-database is unavailable.
+`GET /api/health` reports the service status, version, environment, and database
+connectivity. It executes `SELECT 1` and returns `200` with `database: "up"`
+when the database is reachable, or `503` with `status: "degraded"` and
+`database: "down"` when it is not. The endpoint never crashes when the database
+is offline.
 
 ## Phase roadmap
 

@@ -1,30 +1,11 @@
 """FastAPI application entry point."""
 
-import logging
-from typing import Any
-
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import health
 from app.core.config import get_settings
-
-logger = logging.getLogger(__name__)
-
-
-def _error_response(
-    status_code: int,
-    code: str,
-    message: str,
-    details: Any | None = None,
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        content={"error": {"code": code, "message": message, "details": details}},
-    )
+from app.core.errors import register_exception_handlers
 
 
 def create_app() -> FastAPI:
@@ -52,6 +33,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    register_exception_handlers(app)
     app.include_router(health.router, prefix=settings.api_prefix, tags=["health"])
 
     @app.get("/", include_in_schema=False)
@@ -62,43 +44,6 @@ def create_app() -> FastAPI:
             "docs": "/docs",
             "health": f"{settings.api_prefix}/health",
         }
-
-    @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(
-        _request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
-        code = "http_error"
-        if exc.status_code == 404:
-            code = "not_found"
-        elif exc.status_code == 401:
-            code = "unauthorized"
-        elif exc.status_code == 403:
-            code = "forbidden"
-
-        message = exc.detail if isinstance(exc.detail, str) else "Request failed"
-        return _error_response(exc.status_code, code, message)
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(
-        _request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
-        return _error_response(
-            422,
-            "validation_error",
-            "Request validation failed.",
-            exc.errors(),
-        )
-
-    @app.exception_handler(Exception)
-    async def unhandled_exception_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
-        logger.exception("Unhandled error for %s %s", request.method, request.url)
-        return _error_response(
-            500,
-            "internal_error",
-            "An unexpected error occurred.",
-        )
 
     return app
 

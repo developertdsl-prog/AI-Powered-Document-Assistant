@@ -10,9 +10,9 @@ This repository is built incrementally in six phases. The current state covers
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1.1 | Project setup and runnable frontend/backend | In progress |
-| 1.2 | Frontend layout, navigation, components, placeholder pages | Planned |
-| 1.3 | Backend configuration, PostgreSQL, models, migrations, API contracts | Planned |
+| 1.1 | Project setup and runnable frontend/backend | Complete |
+| 1.2 | Frontend layout, navigation, components, placeholder pages | Complete |
+| 1.3 | Backend configuration, PostgreSQL, models, migrations, API contracts | Complete |
 | 2 | Document ingestion | Planned |
 | 3 | AI and retrieval pipeline | Planned |
 | 4 | User-facing AI features | Planned |
@@ -37,12 +37,15 @@ This repository is built incrementally in six phases. The current state covers
 ├── backend/
 │   ├── app/
 │   │   ├── api/          # HTTP routes
-│   │   ├── core/         # Configuration, security, logging
-│   │   ├── models/       # Database models (Phase 1.3)
+│   │   ├── core/         # Configuration, error handling, shared utilities
+│   │   ├── db/           # Engine, session factory, declarative base
+│   │   ├── models/       # Database models
 │   │   ├── schemas/      # Request/response schemas
 │   │   ├── services/     # Business logic
 │   │   └── main.py       # FastAPI application factory
+│   ├── alembic/          # Database migrations
 │   ├── tests/
+│   ├── alembic.ini
 │   ├── requirements.txt
 │   ├── requirements-dev.txt
 │   └── .env.example
@@ -56,7 +59,9 @@ This repository is built incrementally in six phases. The current state covers
 │   ├── package.json
 │   └── .env.example
 ├── docs/
-│   └── architecture.md
+│   ├── architecture.md
+│   └── api.md
+├── docker-compose.yml
 ├── .gitignore
 └── README.md
 ```
@@ -72,7 +77,24 @@ This repository is built incrementally in six phases. The current state covers
 
 All commands below are for **Windows PowerShell**.
 
-### 1. Backend
+### 1. Database
+
+Start PostgreSQL 16 with pgvector using Docker Compose:
+
+```powershell
+docker compose up -d db
+```
+
+The container exposes PostgreSQL on `localhost:5433` with:
+
+- User: `postgres`
+- Password: `postgres`
+- Database: `ai_document_assistant`
+
+If you prefer an existing PostgreSQL instance, create the database and set
+`DATABASE_URL` accordingly in `backend/.env`.
+
+### 2. Backend
 
 ```powershell
 cd backend
@@ -81,6 +103,7 @@ py -3.12 -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -89,7 +112,7 @@ The API is available at:
 - Health check: <http://localhost:8000/api/health>
 - OpenAPI docs: <http://localhost:8000/docs>
 
-### 2. Frontend
+### 3. Frontend
 
 In a second terminal:
 
@@ -115,7 +138,18 @@ ruff check .
 cd frontend
 npm run typecheck
 npm run lint
+npm run test
 npm run build
+```
+
+Migration commands:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+alembic upgrade head      # apply migrations
+alembic downgrade -1      # roll back one revision
+alembic current           # show the applied revision
 ```
 
 ## Environment variables
@@ -129,6 +163,10 @@ npm run build
 | `ENVIRONMENT` | `development` | Environment name |
 | `API_PREFIX` | `/api` | Prefix for all API routes |
 | `CORS_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` | Allowed browser origins (JSON array) |
+| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5433/ai_document_assistant` | SQLAlchemy database URL |
+| `DB_ECHO` | `false` | Log SQL statements |
+| `DB_POOL_PRE_PING` | `true` | Validate pooled connections before use |
+| `DB_CONNECT_TIMEOUT_SECONDS` | `5` | PostgreSQL connect timeout |
 
 Never commit a real `.env` file. Only `.env.example` files belong in Git.
 
@@ -148,3 +186,4 @@ Never commit a real `.env` file. Only `.env.example` files belong in Git.
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [API contract](docs/api.md)
