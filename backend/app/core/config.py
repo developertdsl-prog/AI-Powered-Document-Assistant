@@ -27,6 +27,12 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+    database_url: str = (
+        "postgresql+psycopg://postgres:postgres@localhost:5433/ai_document_assistant"
+    )
+    db_echo: bool = False
+    db_pool_pre_ping: bool = True
+    db_connect_timeout_seconds: int = 5
 
     @property
     def is_development(self) -> bool:
