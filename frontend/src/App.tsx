@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiBaseUrl } from "@/config/env";
 import {
-  apiBaseUrl,
   fetchHealth,
   type HealthPayload,
-} from "./services/health";
+} from "@/services/health";
 
 type HealthStatus = "loading" | "online" | "offline";
 

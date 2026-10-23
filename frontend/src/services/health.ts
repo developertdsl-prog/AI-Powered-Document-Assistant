@@ -1,6 +1,4 @@
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
+import { apiBaseUrl } from "@/config/env";
 
 export interface HealthPayload {
   status: string;
