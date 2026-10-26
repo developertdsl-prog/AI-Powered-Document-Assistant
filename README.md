@@ -4,7 +4,7 @@ Upload PDF, DOCX, and TXT documents, ask questions about their content, and get
 answers grounded in the source files with citations.
 
 This repository is built incrementally in six phases. The current state covers
-**Phase 1 - Project foundation**.
+**Phase 2 - Document ingestion**.
 
 ## Status
 
@@ -15,7 +15,7 @@ This repository is built incrementally in six phases. The current state covers
 | 1.3 | Backend configuration, PostgreSQL, models, migrations, API contracts | Complete |
 | 2.1 | Upload UI with drag-and-drop, progress, and status | Complete |
 | 2.2 | Upload API, validation, ownership, and storage | Complete |
-| 2.3 | Parsing, metadata, processing status, and error handling | Planned |
+| 2.3 | Parsing, metadata, processing status, and error handling | Complete |
 | 3 | AI and retrieval pipeline | Planned |
 | 4 | User-facing AI features | Planned |
 | 5 | Security, testing, reliability | Planned |
@@ -144,12 +144,19 @@ npm run test
 npm run build
 ```
 
-### Uploads
+### Uploads and processing
 
 - Stored files live under `backend/uploads/` by owner and are gitignored.
 - Supported types: `PDF`, `DOCX`, `TXT`. Validation inspects file content
   (magic bytes/ZIP structure) in addition to the extension.
 - Uploads are owned by the development user until Phase 5 authentication.
+- Uploaded documents are processed in the background by default. PDF pages keep
+  their real page numbers, DOCX uses one logical page because DOCX has no fixed
+  pagination, and TXT files split on form-feed characters.
+- Processing records `processing`, then `ready` or `failed`, with metadata,
+  page text, and a user-facing error message. Set
+  `PROCESS_UPLOADS_IN_BACKGROUND=false` to process synchronously in the upload
+  request (useful for debugging).
 
 Migration commands:
 
@@ -181,6 +188,7 @@ alembic current           # show the applied revision
 | `ALLOWED_FILE_TYPES` | `["pdf","docx","txt"]` | Allowed file extensions (JSON array) |
 | `DEV_USER_EMAIL` | `dev@local.test` | Development user email used until Phase 5 authentication |
 | `DEV_USER_NAME` | `Development User` | Display name for the development user |
+| `PROCESS_UPLOADS_IN_BACKGROUND` | `true` | Parse uploads in a background task; set `false` to parse during the upload request |
 
 Never commit a real `.env` file. Only `.env.example` files belong in Git.
 
@@ -194,7 +202,9 @@ Never commit a real `.env` file. Only `.env.example` files belong in Git.
 
 - `main` is the stable branch.
 - `dev` is the integration branch.
-- Each phase task is implemented on its own branch and merged through a pull request.
+- Each phase task is implemented on its own branch, then committed, pushed, and
+  merged into `dev` before the next branch starts. Each merge is tagged as a
+  milestone (see [Milestones](docs/milestones.md)).
 - A phase starts only after the previous phase's acceptance criteria pass.
 
 ## Documentation

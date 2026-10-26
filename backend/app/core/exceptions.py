@@ -64,3 +64,21 @@ class StorageError(AppError):
 
     def __init__(self, message: str = "The file could not be stored.") -> None:
         super().__init__(message)
+
+
+class DocumentNotReadyError(AppError):
+    status_code = 409
+    code = "document_not_ready"
+
+    def __init__(self, status: str) -> None:
+        if status == "failed":
+            message = (
+                "Document processing failed. "
+                "See the document details for the error."
+            )
+        else:
+            message = (
+                f"Document is not ready (status: {status}). "
+                "Try again shortly."
+            )
+        super().__init__(message)

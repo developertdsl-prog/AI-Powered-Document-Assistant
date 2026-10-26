@@ -63,6 +63,7 @@ def app_settings(tmp_path: Path) -> Settings:
         allowed_file_types=["pdf", "docx", "txt"],
         dev_user_email="tester@example.com",
         dev_user_name="Tester",
+        process_uploads_in_background=False,
     )
 
 

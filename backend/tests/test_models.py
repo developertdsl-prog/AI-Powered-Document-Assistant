@@ -9,7 +9,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.models import Conversation, Document, DocumentChunk, Message, User
+from app.models import (
+    Conversation,
+    Document,
+    DocumentChunk,
+    DocumentPage,
+    Message,
+    User,
+)
 
 
 @pytest.fixture
@@ -64,12 +71,19 @@ def test_document_chunk_conversation_and_message_round_trip(
         page_number=1,
         token_count=9,
     )
+    page = DocumentPage(
+        document_id=document.id,
+        page_number=1,
+        content="The quarterly revenue grew by 12 percent.",
+        character_count=42,
+        page_metadata={"width": 612.0},
+    )
     conversation = Conversation(
         owner_id=user.id,
         document_id=document.id,
         title="Revenue question",
     )
-    session.add_all([chunk, conversation])
+    session.add_all([chunk, page, conversation])
     session.flush()
 
     message = Message(
@@ -85,6 +99,7 @@ def test_document_chunk_conversation_and_message_round_trip(
     stored_document = session.scalars(select(Document)).one()
     assert stored_user.documents == [stored_document]
     assert stored_document.chunks[0].content.startswith("The quarterly")
+    assert stored_document.pages[0].content.startswith("The quarterly")
     assert session.scalars(select(Message)).one().role == "assistant"
 
 
@@ -99,6 +114,14 @@ def test_deleting_user_cascades_to_owned_records(session: Session) -> None:
             document_id=document.id,
             chunk_index=0,
             content="Chunk",
+        )
+    )
+    session.add(
+        DocumentPage(
+            document_id=document.id,
+            page_number=1,
+            content="Page",
+            character_count=4,
         )
     )
     conversation = Conversation(owner_id=user.id, document_id=document.id)
@@ -118,6 +141,7 @@ def test_deleting_user_cascades_to_owned_records(session: Session) -> None:
 
     assert session.scalars(select(Document)).all() == []
     assert session.scalars(select(DocumentChunk)).all() == []
+    assert session.scalars(select(DocumentPage)).all() == []
     assert session.scalars(select(Conversation)).all() == []
     assert session.scalars(select(Message)).all() == []
 
@@ -132,6 +156,33 @@ def test_duplicate_chunk_index_is_rejected(session: Session) -> None:
         [
             DocumentChunk(document_id=document.id, chunk_index=0, content="one"),
             DocumentChunk(document_id=document.id, chunk_index=0, content="two"),
+        ]
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_duplicate_page_number_is_rejected(session: Session) -> None:
+    user = User(email="pages@example.com")
+    session.add(user)
+    session.flush()
+    document = _create_document(session, user)
+
+    session.add_all(
+        [
+            DocumentPage(
+                document_id=document.id,
+                page_number=1,
+                content="one",
+                character_count=3,
+            ),
+            DocumentPage(
+                document_id=document.id,
+                page_number=1,
+                content="two",
+                character_count=3,
+            ),
         ]
     )
 

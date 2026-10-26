@@ -31,6 +31,7 @@ def test_upgrade_and_downgrade_initial_migration(tmp_path: Path) -> None:
         "users",
         "documents",
         "document_chunks",
+        "document_pages",
         "conversations",
         "messages",
     } <= table_names
@@ -40,4 +41,5 @@ def test_upgrade_and_downgrade_initial_migration(tmp_path: Path) -> None:
     remaining_tables = set(inspect(engine).get_table_names())
     assert "users" not in remaining_tables
     assert "documents" not in remaining_tables
+    assert "document_pages" not in remaining_tables
     engine.dispose()

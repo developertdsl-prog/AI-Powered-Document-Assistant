@@ -1,4 +1,5 @@
 import { FileText } from "lucide-react";
+import { Link } from "react-router-dom";
 import { DocumentStatusBadge } from "./DocumentStatusBadge";
 import {
   documentTypeLabel,
@@ -25,7 +26,12 @@ export function DocumentList({ documents }: { documents: DocumentRecord[] }) {
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                {document.original_filename}
+                <Link
+                  to={`/documents/${document.id}`}
+                  className="rounded transition hover:text-sky-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:text-sky-300"
+                >
+                  {document.original_filename}
+                </Link>
               </p>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                 {documentTypeLabel(document.original_filename)} &middot;{" "}

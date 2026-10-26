@@ -2,6 +2,7 @@ import { apiBaseUrl } from "@/config/env";
 import type {
   DocumentListResponse,
   DocumentRecord,
+  DocumentTextResponse,
 } from "@/types/documents";
 import { ApiError } from "./api";
 
@@ -111,4 +112,36 @@ export async function listDocuments(
   }
 
   return (await response.json()) as DocumentListResponse;
+}
+
+export async function getDocument(
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<DocumentRecord> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/documents/${encodeURIComponent(documentId)}`,
+    { signal },
+  );
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(response);
+  }
+
+  return (await response.json()) as DocumentRecord;
+}
+
+export async function getDocumentText(
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<DocumentTextResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/documents/${encodeURIComponent(documentId)}/text`,
+    { signal },
+  );
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(response);
+  }
+
+  return (await response.json()) as DocumentTextResponse;
 }

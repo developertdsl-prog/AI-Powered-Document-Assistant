@@ -4,16 +4,31 @@ import hashlib
 import io
 import zipfile
 from pathlib import Path
+from uuid import UUID
 
+import pymupdf
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import Settings
-from app.models import Document, User
+from app.models import Document, DocumentPage, User
+from app.services.processing import process_document
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+
+
+def make_pdf_bytes(page_texts: list[str]) -> bytes:
+    pdf = pymupdf.open()
+
+    try:
+        for page_text in page_texts:
+            page = pdf.new_page()
+            page.insert_text((72, 72), page_text)
+        return pdf.tobytes()
+    finally:
+        pdf.close()
 
 
 def make_docx_bytes() -> bytes:
@@ -292,3 +307,121 @@ def test_development_user_is_created_once(db_session: Session) -> None:
 
     assert first.id == second.id
     assert first.email == "solo@example.com"
+
+
+def test_uploaded_pdf_can_be_processed_and_inspected(
+    client: TestClient,
+    db_session: Session,
+    app_settings: Settings,
+) -> None:
+    response = upload(
+        client,
+        filename="two-pages.pdf",
+        content=make_pdf_bytes(["Alpha page", "Beta page"]),
+        content_type="application/pdf",
+    )
+
+    assert response.status_code == 201
+    document_id = UUID(response.json()["id"])
+
+    processed = process_document(db_session, document_id, app_settings)
+    assert processed is not None
+    assert processed.status == "ready"
+
+    text_response = client.get(f"/api/documents/{document_id}/text")
+
+    assert text_response.status_code == 200
+    body = text_response.json()
+    assert body["document_id"] == str(document_id)
+    assert body["status"] == "ready"
+    assert body["page_count"] == 2
+    assert body["metadata"]["format"] == "pdf"
+    assert [page["page_number"] for page in body["pages"]] == [1, 2]
+    assert "Alpha page" in body["pages"][0]["content"]
+    assert "Beta page" in body["pages"][1]["content"]
+
+
+def test_text_endpoint_rejects_unprocessed_document(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+) -> None:
+    document = Document(
+        owner_id=user.id,
+        original_filename="pending.pdf",
+        storage_path=f"{user.id}/pending.pdf",
+        content_type="application/pdf",
+        file_size_bytes=10,
+        status="processing",
+    )
+    db_session.add(document)
+    db_session.commit()
+
+    response = client.get(f"/api/documents/{document.id}/text")
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["error"]["code"] == "document_not_ready"
+    assert "not ready" in body["error"]["message"].lower()
+
+
+def test_text_endpoint_hides_other_users_documents(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    other_user = User(email="text-owner@example.com")
+    db_session.add(other_user)
+    db_session.flush()
+
+    document = Document(
+        owner_id=other_user.id,
+        original_filename="private.txt",
+        storage_path=f"{other_user.id}/private.txt",
+        content_type="text/plain",
+        file_size_bytes=7,
+        status="ready",
+    )
+    db_session.add(document)
+    db_session.flush()
+    db_session.add(
+        DocumentPage(
+            document_id=document.id,
+            page_number=1,
+            content="Secret text",
+            character_count=11,
+        )
+    )
+    db_session.commit()
+
+    response = client.get(f"/api/documents/{document.id}/text")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_upload_schedules_background_processing(
+    client: TestClient,
+    app_settings: Settings,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        app_settings,
+        "process_uploads_in_background",
+        True,
+    )
+    scheduled: list[UUID] = []
+
+    monkeypatch.setattr(
+        "app.api.routes.documents.process_document_in_background",
+        lambda document_id: scheduled.append(document_id),
+    )
+
+    response = upload(
+        client,
+        filename="queued.pdf",
+        content=PDF_BYTES,
+        content_type="application/pdf",
+    )
+
+    assert response.status_code == 201
+    assert scheduled == [UUID(response.json()["id"])]
