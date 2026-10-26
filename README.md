@@ -4,7 +4,8 @@ Upload PDF, DOCX, and TXT documents, ask questions about their content, and get
 answers grounded in the source files with citations.
 
 This repository is built incrementally in six phases. The current state covers
-**Phase 2 - Document ingestion**.
+**Phase 3 - AI and retrieval pipeline** (chunking complete; embeddings and
+retrieval in progress).
 
 ## Status
 
@@ -16,7 +17,7 @@ This repository is built incrementally in six phases. The current state covers
 | 2.1 | Upload UI with drag-and-drop, progress, and status | Complete |
 | 2.2 | Upload API, validation, ownership, and storage | Complete |
 | 2.3 | Parsing, metadata, processing status, and error handling | Complete |
-| 3 | AI and retrieval pipeline | Planned |
+| 3 | AI and retrieval pipeline | In progress |
 | 4 | User-facing AI features | Planned |
 | 5 | Security, testing, reliability | Planned |
 | 6 | Deployment and delivery | Planned |
@@ -157,6 +158,10 @@ npm run build
   page text, and a user-facing error message. Set
   `PROCESS_UPLOADS_IN_BACKGROUND=false` to process synchronously in the upload
   request (useful for debugging).
+- Processing also splits the extracted pages into overlapping, paragraph-aware
+  chunks (`CHUNK_SIZE_CHARS`, default 1000 characters; `CHUNK_OVERLAP_CHARS`,
+  default 150) stored in `document_chunks`. These chunks are the retrieval unit
+  for the Phase 3 search and answer pipeline.
 
 Migration commands:
 
