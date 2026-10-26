@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.exceptions import DocumentNotFoundError
-from app.models import Document
+from app.models import Document, DocumentPage
 from app.services.storage import delete_stored_file, save_upload
 
 
@@ -93,3 +93,19 @@ def get_document(
         raise DocumentNotFoundError()
 
     return document
+
+
+def list_document_pages(
+    db: Session,
+    *,
+    document_id: uuid.UUID,
+) -> list[DocumentPage]:
+    """Return extracted pages in page order."""
+
+    return list(
+        db.scalars(
+            select(DocumentPage)
+            .where(DocumentPage.document_id == document_id)
+            .order_by(DocumentPage.page_number)
+        ).all()
+    )

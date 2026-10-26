@@ -1,17 +1,32 @@
-"""Document upload, listing, and detail routes."""
+"""Document upload, listing, detail, and extracted-text routes."""
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import Settings, get_settings
+from app.core.exceptions import DocumentNotReadyError
 from app.db.session import get_db
 from app.models import Document, User
 from app.schemas.common import ErrorResponse
-from app.schemas.document import DocumentListResponse, DocumentResponse
+from app.schemas.document import (
+    DocumentListResponse,
+    DocumentPageResponse,
+    DocumentResponse,
+    DocumentTextResponse,
+)
 from app.services import documents as document_service
+from app.services.processing import process_document_in_background
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -30,6 +45,7 @@ _UPLOAD_ERROR_RESPONSES = {
     responses=_UPLOAD_ERROR_RESPONSES,
 )
 def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF, DOCX, or TXT file"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -37,13 +53,21 @@ def upload_document(
 ) -> Document:
     """Validate, store, and register an uploaded document."""
 
-    return document_service.create_document(
+    document = document_service.create_document(
         db,
         owner_id=current_user.id,
         filename=file.filename,
         file_obj=file.file,
         settings=settings,
     )
+
+    if settings.process_uploads_in_background:
+        background_tasks.add_task(
+            process_document_in_background,
+            document.id,
+        )
+
+    return document
 
 
 @router.get(
@@ -89,4 +113,54 @@ def get_document(
         db,
         owner_id=current_user.id,
         document_id=document_id,
+    )
+
+
+@router.get(
+    "/{document_id}/text",
+    response_model=DocumentTextResponse,
+    summary="Get extracted text",
+    responses={
+        404: {"model": ErrorResponse, "description": "Document not found."},
+        409: {
+            "model": ErrorResponse,
+            "description": "Document has not finished processing.",
+        },
+    },
+)
+def get_document_text(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DocumentTextResponse:
+    """Return extracted text and metadata for a ready document."""
+
+    document = document_service.get_document(
+        db,
+        owner_id=current_user.id,
+        document_id=document_id,
+    )
+
+    if document.status != "ready":
+        raise DocumentNotReadyError(document.status)
+
+    pages = document_service.list_document_pages(
+        db,
+        document_id=document.id,
+    )
+
+    return DocumentTextResponse(
+        document_id=document.id,
+        status=document.status,
+        page_count=document.page_count,
+        metadata=document.doc_metadata,
+        pages=[
+            DocumentPageResponse(
+                page_number=page.page_number,
+                content=page.content,
+                character_count=page.character_count,
+                metadata=page.page_metadata,
+            )
+            for page in pages
+        ],
     )

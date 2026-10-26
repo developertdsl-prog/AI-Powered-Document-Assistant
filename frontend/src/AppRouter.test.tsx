@@ -7,6 +7,8 @@ import AppRouter from "@/AppRouter";
 vi.mock("@/services/documents", () => ({
   listDocuments: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   uploadDocument: vi.fn(),
+  getDocument: vi.fn(),
+  getDocumentText: vi.fn(),
 }));
 
 function renderAt(path: string) {

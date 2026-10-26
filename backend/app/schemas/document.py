@@ -1,6 +1,7 @@
 """Document request and response schemas."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -28,3 +29,22 @@ class DocumentListResponse(BaseModel):
 
     items: list[DocumentResponse]
     total: int
+
+
+class DocumentPageResponse(BaseModel):
+    """Extracted text for one page."""
+
+    page_number: int
+    content: str
+    character_count: int
+    metadata: dict[str, Any] | None
+
+
+class DocumentTextResponse(BaseModel):
+    """Extracted text and processing metadata for a document."""
+
+    document_id: UUID
+    status: str
+    page_count: int | None
+    metadata: dict[str, Any] | None
+    pages: list[DocumentPageResponse]

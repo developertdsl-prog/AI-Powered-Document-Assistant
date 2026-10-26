@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     allowed_file_types: list[str] = ["pdf", "docx", "txt"]
     dev_user_email: str = "dev@local.test"
     dev_user_name: str = "Development User"
+    process_uploads_in_background: bool = True
 
     @property
     def is_development(self) -> bool:

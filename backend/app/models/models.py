@@ -86,11 +86,50 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    pages: Mapped[list[DocumentPage]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="DocumentPage.page_number",
+    )
 
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending','processing','ready','failed')",
             name="ck_documents_status",
+        ),
+    )
+
+
+class DocumentPage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Extracted text for one document page."""
+
+    __tablename__ = "document_pages"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    character_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    page_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+    document: Mapped[Document] = relationship(back_populates="pages")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "page_number",
+            name="uq_document_pages_doc_page",
+        ),
+        CheckConstraint(
+            "page_number > 0",
+            name="ck_document_pages_page_number",
         ),
     )
 

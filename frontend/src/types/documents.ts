@@ -17,3 +17,18 @@ export interface DocumentListResponse {
   items: DocumentRecord[];
   total: number;
 }
+
+export interface DocumentPage {
+  page_number: number;
+  content: string;
+  character_count: number;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface DocumentTextResponse {
+  document_id: string;
+  status: DocumentStatus;
+  page_count: number | null;
+  metadata: Record<string, unknown> | null;
+  pages: DocumentPage[];
+}
