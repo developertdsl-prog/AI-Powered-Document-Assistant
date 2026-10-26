@@ -105,7 +105,7 @@ is offline.
 ## Phase roadmap
 
 - Phase 1: foundation, frontend shell, database models and API contracts.
-- Phase 2: upload, validation, storage, parsing, and processing status.
+- Phase 2: upload, parsing, metadata, processing status, and error handling.
 - Phase 3: chunking, embeddings, pgvector retrieval, grounded answer generation.
 - Phase 4: chat, summarization, extraction, document library and history.
 - Phase 5: authentication, authorization, automated tests, reliability.

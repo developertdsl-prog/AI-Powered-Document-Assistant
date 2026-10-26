@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     dev_user_email: str = "dev@local.test"
     dev_user_name: str = "Development User"
     process_uploads_in_background: bool = True
+    chunk_size_chars: int = 1000
+    chunk_overlap_chars: int = 150
 
     @property
     def is_development(self) -> bool:

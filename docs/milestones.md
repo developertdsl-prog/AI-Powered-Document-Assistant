@@ -4,8 +4,8 @@ This project uses Git annotated tags as milestones so progress is visible
 without requiring a GitHub token or CLI. Each tag is pushed with the branch
 merge it records.
 
-GitHub does not expose milestone creation through plain `git`; the equivalent
-GitHub milestones can be created later from the tag list below.
+GitHub milestones are created for every phase and issues/PRs are assigned to
+them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/milestones>.
 
 | Milestone | Phase | Branch | Merge target | Tag |
 | --- | --- | --- | --- | --- |
@@ -15,13 +15,16 @@ GitHub milestones can be created later from the tag list below.
 | Upload API | 2.2 | `7-upload-api-file-validation-ownership-storage` | `dev` | `milestone-2.2-upload-api` |
 | Upload UI | 2.1 | `8-upload-ui-with-drag-and-drop-progress-status` | `dev` | `milestone-2.1-upload-ui` |
 | Parsing and processing | 2.3 | `9-parsing-metadata-processing-status-error-handling` | `dev` | `milestone-2.3-parsing` |
+| Chunking pipeline | 3.1 | `10-chunking-pipeline` | `dev` | `milestone-3.1-chunking` |
 
 ## Workflow
 
-1. Implement one branch on its own and run its checks.
-2. Commit and push the branch.
-3. Merge the branch into `dev` with a merge commit.
-4. Tag the merge commit with the milestone tag and push the tag.
-5. Start the next branch from the updated `dev`.
+1. Create a GitHub issue for the work and assign it to the phase milestone.
+2. Implement one branch on its own and run its checks.
+3. Commit and push the branch.
+4. Open a pull request into `dev` linked to the issue and milestone.
+5. Merge the branch into `dev` with a merge commit.
+6. Tag the merge commit with the milestone tag and push the tag.
+7. Start the next branch from the updated `dev`.
 
 `main` stays stable and receives `dev` only at release points.
