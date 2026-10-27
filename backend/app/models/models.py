@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -22,6 +24,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.config import EMBEDDING_DIMENSIONS
 from app.db.base import Base
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
@@ -31,9 +34,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(
-        String(320), unique=True, index=True, nullable=False
-    )
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255))
     hashed_password: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -66,9 +67,7 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     checksum: Mapped[str | None] = mapped_column(String(64), index=True)
-    status: Mapped[str] = mapped_column(
-        String(20), default="pending", nullable=False
-    )
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     page_count: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(Text)
     doc_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
@@ -114,9 +113,7 @@ class DocumentPage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    character_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    character_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     page_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
     document: Mapped[Document] = relationship(back_populates="pages")
@@ -135,7 +132,7 @@ class DocumentPage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
 class DocumentChunk(Base, UUIDPrimaryKeyMixin):
-    """Extracted text chunk. Embeddings are added in Phase 3."""
+    """Extracted text chunk with its embedding vector (Phase 3)."""
 
     __tablename__ = "document_chunks"
 
@@ -149,6 +146,10 @@ class DocumentChunk(Base, UUIDPrimaryKeyMixin):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     page_number: Mapped[int | None] = mapped_column(Integer)
     token_count: Mapped[int | None] = mapped_column(Integer)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(EMBEDDING_DIMENSIONS),
+        nullable=True,
+    )
     chunk_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -163,6 +164,14 @@ class DocumentChunk(Base, UUIDPrimaryKeyMixin):
             "document_id",
             "chunk_index",
             name="uq_document_chunks_doc_index",
+        ),
+        # Cosine-similarity search index (PostgreSQL/pgvector only; other
+        # dialects create a plain index when creating the tables in tests).
+        Index(
+            "ix_document_chunks_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
     )
 
@@ -183,14 +192,10 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ForeignKey("documents.id", ondelete="CASCADE"),
         index=True,
     )
-    title: Mapped[str] = mapped_column(
-        String(255), default="New conversation", nullable=False
-    )
+    title: Mapped[str] = mapped_column(String(255), default="New conversation", nullable=False)
 
     owner: Mapped[User] = relationship(back_populates="conversations")
-    document: Mapped[Document | None] = relationship(
-        back_populates="conversations"
-    )
+    document: Mapped[Document | None] = relationship(back_populates="conversations")
     messages: Mapped[list[Message]] = relationship(
         back_populates="conversation",
         cascade="all, delete-orphan",

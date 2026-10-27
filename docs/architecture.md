@@ -17,7 +17,7 @@ Browser (React SPA)
 FastAPI application
         |
         +-- PostgreSQL        (metadata, conversations, document records)
-        +-- Vector store      (pgvector, Phase 3)
+        +-- Vector store      (pgvector column + HNSW index, Phase 3.2)
         +-- File storage      (local disk in development, object storage in production)
         +-- LLM / embeddings  (external provider through the backend only)
 ```
@@ -91,8 +91,10 @@ initial migration creates `users`, `documents`, `document_chunks`,
 production schemas; `Base.metadata.create_all` is used in tests only.
 
 The test database can be SQLite in memory because the models use portable
-types (`Uuid`, `JSON`, `String`). The JSONB/pgvector-specific columns are
-introduced in Phase 3, together with PostgreSQL-only tests.
+types (`Uuid`, `JSON`, `String`). The pgvector `embedding` column is a
+`VECTOR(1536)` type that SQLite accepts as a plain column, so the schema
+tests stay on SQLite; the `vector` extension and the HNSW cosine index are
+created only on PostgreSQL.
 
 ## Health checks
 

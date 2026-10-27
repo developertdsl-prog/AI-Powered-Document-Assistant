@@ -16,6 +16,17 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 | Upload UI | 2.1 | `8-upload-ui-with-drag-and-drop-progress-status` | `dev` | `milestone-2.1-upload-ui` |
 | Parsing and processing | 2.3 | `9-parsing-metadata-processing-status-error-handling` | `dev` | `milestone-2.3-parsing` |
 | Chunking pipeline | 3.1 | `10-chunking-pipeline` | `dev` | `milestone-3.1-chunking` |
+| Embeddings | 3.2 | `11-embeddings-pgvector` | `dev` | `milestone-3.2-embeddings` |
+| pgvector retrieval | 3.3 | _(planned)_ | `dev` | `milestone-3.3-retrieval` (planned) |
+| Grounded answer generation | 3.4 | _(planned)_ | `dev` | `milestone-3.4-answers` (planned) |
+| User-facing AI features | 4 | _(planned)_ | `dev` | `milestone-4-ai-features` (planned) |
+| Security, testing, reliability | 5 | _(planned)_ | `dev` | `milestone-5-security-testing` (planned) |
+| Deployment and delivery | 6 | _(planned)_ | `dev` | `milestone-6-deployment` (planned) |
+
+On GitHub, Phases 1 and 2 are split into sub-milestones (1.1–1.3, 2.1–2.3),
+while Phases 3–6 are each a single milestone. The git tags above stay per-merge
+regardless of how the GitHub milestones are grouped, so each row records one
+tagged merge commit on `dev`.
 
 ## Workflow
 
@@ -27,4 +38,6 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 6. Tag the merge commit with the milestone tag and push the tag.
 7. Start the next branch from the updated `dev`.
 
+
+ 
 `main` stays stable and receives `dev` only at release points.
