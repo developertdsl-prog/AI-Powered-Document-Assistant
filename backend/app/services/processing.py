@@ -14,6 +14,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.models import Document, DocumentChunk, DocumentPage
 from app.services.chunking import ChunkingError, chunk_pages
+from app.services.embeddings import EmbeddingError, get_embedding_provider
 from app.services.extraction import ExtractionError, extract_document
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,22 @@ def process_document(
         if not chunks:
             raise ChunkingError("No chunkable text was produced.")
 
-        for chunk in chunks:
+        provider = get_embedding_provider(settings)
+        embeddings: list[list[float] | None]
+        if provider is None:
+            embeddings = [None] * len(chunks)
+            embedding_name = None
+        else:
+            vectors = provider.embed_texts([chunk.content for chunk in chunks])
+            if len(vectors) != len(chunks):
+                raise EmbeddingError(
+                    "The embedding provider returned "
+                    f"{len(vectors)} vectors for {len(chunks)} chunks."
+                )
+            embeddings = list(vectors)
+            embedding_name = provider.name
+
+        for chunk, embedding in zip(chunks, embeddings, strict=True):
             db.add(
                 DocumentChunk(
                     document_id=document.id,
@@ -111,19 +127,23 @@ def process_document(
                     content=chunk.content,
                     page_number=chunk.page_number,
                     token_count=chunk.token_count,
+                    embedding=embedding,
                     chunk_metadata=chunk.metadata,
                 )
             )
 
         document.page_count = len(extracted.pages)
-        document.doc_metadata = extracted.metadata
+        document.doc_metadata = {
+            **extracted.metadata,
+            "embedding_provider": embedding_name,
+        }
         document.status = "ready"
         document.error_message = None
         document.processed_at = datetime.now(UTC)
         db.commit()
         db.refresh(document)
         return document
-    except (ExtractionError, ChunkingError) as exc:
+    except (ExtractionError, ChunkingError, EmbeddingError) as exc:
         db.rollback()
         return _mark_failed(db, document_id, str(exc))
     except Exception:

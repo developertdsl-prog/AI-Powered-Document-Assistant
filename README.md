@@ -162,6 +162,11 @@ npm run build
   chunks (`CHUNK_SIZE_CHARS`, default 1000 characters; `CHUNK_OVERLAP_CHARS`,
   default 150) stored in `document_chunks`. These chunks are the retrieval unit
   for the Phase 3 search and answer pipeline.
+- Each chunk is embedded into a 1536-wide pgvector vector during processing
+  (`EMBEDDING_PROVIDER`, default `auto`: OpenAI when `OPENAI_API_KEY` is set,
+  otherwise a deterministic offline hash provider; `none` skips vectors).
+  The chosen provider is recorded in the document's metadata, and an
+  embedding failure marks the document `failed` with a user-facing message.
 
 Migration commands:
 
@@ -194,6 +199,14 @@ alembic current           # show the applied revision
 | `DEV_USER_EMAIL` | `dev@local.test` | Development user email used until Phase 5 authentication |
 | `DEV_USER_NAME` | `Development User` | Display name for the development user |
 | `PROCESS_UPLOADS_IN_BACKGROUND` | `true` | Parse uploads in a background task; set `false` to parse during the upload request |
+| `CHUNK_SIZE_CHARS` | `1000` | Target size of a retrieval chunk in characters |
+| `CHUNK_OVERLAP_CHARS` | `150` | Characters carried from one chunk into the next |
+| `EMBEDDING_PROVIDER` | `auto` | `auto` (OpenAI when a key is set, otherwise offline hash), `openai`, `hash`, or `none` |
+| `EMBEDDING_BATCH_SIZE` | `100` | Texts sent per embeddings API request |
+| `EMBEDDING_TIMEOUT_SECONDS` | `30` | Embeddings request timeout |
+| `OPENAI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible embeddings endpoint |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Base URL of the embeddings endpoint (OpenAI-compatible services work here) |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model; width must stay 1536 to match the schema |
 
 Never commit a real `.env` file. Only `.env.example` files belong in Git.
 

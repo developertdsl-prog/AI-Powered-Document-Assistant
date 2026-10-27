@@ -4,6 +4,11 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Fixed embedding width shared by the model, the Alembic migration, and the
+# embedding providers. Changing it is a schema change: add a new migration
+# and update every provider together.
+EMBEDDING_DIMENSIONS = 1536
+
 
 class Settings(BaseSettings):
     """Runtime settings.
@@ -41,6 +46,12 @@ class Settings(BaseSettings):
     process_uploads_in_background: bool = True
     chunk_size_chars: int = 1000
     chunk_overlap_chars: int = 150
+    embedding_provider: str = "auto"
+    embedding_batch_size: int = 100
+    embedding_timeout_seconds: float = 30.0
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_embedding_model: str = "text-embedding-3-small"
 
     @property
     def is_development(self) -> bool:
