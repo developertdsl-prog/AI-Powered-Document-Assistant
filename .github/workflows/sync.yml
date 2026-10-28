@@ -1,0 +1,200 @@
+name: Repository sync
+
+on:
+  push:
+    branches:
+      - automation-sync
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    name: Open and merge the Phase 3.3 pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync issues, pull request, milestones, and backlog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = "12-pgvector-retrieval-similarity-search-api";
+            const M3 = 8, M4 = 9, M5 = 10, M6 = 11;
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+            // 1. Milestone on the Phase 3.3 issue
+            await github.rest.issues.update({ owner, repo, issue_number: 16, milestone: M3 });
+            console.log("issue #16 milestone set");
+
+            // 2. Open the pull request (idempotent)
+            const listed = await github.rest.pulls.list({
+              owner, repo, state: "all", head: owner + ":" + branch, per_page: 10
+            });
+            let pr = listed.data[0];
+            const prBody = [
+              "## Summary",
+              "",
+              "- `POST /api/documents/{id}/search` embeds the query and ranks a document's embedded chunks by cosine similarity (`app/services/retrieval.py`)",
+              "- Ownership, `ready` status, disabled embeddings (409), and limit validation covered by 10 new tests",
+              "- Fixes a latent bug where a validator failure inside a 422 response raised `ValueError` and surfaced as a 500",
+              "- Contract added to `docs/api.md`; `docs/milestones.md` row 3.3 now points at this branch",
+              "",
+              "Closes #16"
+            ].join("\n");
+            if (!pr) {
+              try {
+                pr = (await github.rest.pulls.create({
+                  owner, repo, base: "dev", head: branch,
+                  title: "pgvector retrieval (Phase 3.3)", body: prBody
+                })).data;
+                console.log("opened PR #" + pr.number);
+              } catch (err) {
+                console.log("PR creation unavailable: " + err.message);
+                const again = await github.rest.pulls.list({
+                  owner, repo, state: "all", head: owner + ":" + branch, per_page: 10
+                });
+                pr = again.data[0] || null;
+              }
+            } else {
+              console.log("PR #" + pr.number + " already exists");
+            }
+
+            // 3. Milestone on the pull request
+            if (pr) {
+              await github.rest.issues.update({ owner, repo, issue_number: pr.number, milestone: M3 });
+              console.log("milestone set on PR #" + pr.number);
+            } else {
+              console.log("no pull request yet; milestone deferred");
+            }
+
+            // 4. Merge it (mergeable state may need a moment)
+            for (let attempt = 0; pr && attempt < 10; attempt++) {
+              const current = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+              if (current.data.merged) {
+                console.log("PR #" + pr.number + " already merged");
+                break;
+              }
+              try {
+                await github.rest.pulls.merge({
+                  owner, repo, pull_number: pr.number, merge_method: "merge"
+                });
+                console.log("merged PR #" + pr.number);
+                break;
+              } catch (err) {
+                console.log("merge attempt " + (attempt + 1) + " failed: " + err.message);
+                await sleep(4000);
+              }
+            }
+
+            // 5. Backlog issues for the remaining milestones
+            const specs = [
+              {
+                title: "Grounded answer generation with citations (Phase 3.4)",
+                milestone: M3,
+                body: [
+                  "## Goal",
+                  "",
+                  "Answer questions about a document using only retrieved chunks, with citations back to page and chunk.",
+                  "",
+                  "## Scope",
+                  "",
+                  "- Prompt assembly from the `POST /api/documents/{id}/search` results",
+                  "- `POST /api/documents/{id}/chat` returning a cited answer",
+                  "- Refuse to answer when retrieval confidence is low"
+                ].join("\n")
+              },
+              {
+                title: "Chat interface with conversation history (Phase 4)",
+                milestone: M4,
+                body: [
+                  "## Goal",
+                  "",
+                  "A chat page where users ask questions and see cited answers.",
+                  "",
+                  "## Scope",
+                  "",
+                  "- Conversations and messages API wired to the answer endpoint",
+                  "- Streaming message rendering with citation links",
+                  "- Conversation list and document-scoped threads"
+                ].join("\n")
+              },
+              {
+                title: "Summaries and structured extraction endpoints (Phase 4)",
+                milestone: M4,
+                body: [
+                  "## Goal",
+                  "",
+                  "Deliver the planned `/summaries` and `/extractions` contracts from `docs/api.md`.",
+                  "",
+                  "## Scope",
+                  "",
+                  "- `POST /api/documents/{id}/summaries` with cached results",
+                  "- `POST /api/documents/{id}/extractions` returning typed fields",
+                  "- Document detail panels in the frontend"
+                ].join("\n")
+              },
+              {
+                title: "Authentication, registration, and rate limiting (Phase 5)",
+                milestone: M5,
+                body: [
+                  "## Goal",
+                  "",
+                  "Replace the development user with real accounts and protect the API.",
+                  "",
+                  "## Scope",
+                  "",
+                  "- `POST /api/auth/register` and `/api/auth/login` with hashed passwords",
+                  "- Bearer token auth on every document route",
+                  "- Per-user rate limits on upload, search, and chat"
+                ].join("\n")
+              },
+              {
+                title: "CI pipeline: required checks and coverage gates (Phase 5)",
+                milestone: M5,
+                body: [
+                  "## Goal",
+                  "",
+                  "Turn the existing CI workflow into enforced merge gates.",
+                  "",
+                  "## Scope",
+                  "",
+                  "- Require the backend and frontend checks on `dev`",
+                  "- Coverage thresholds and a coverage report artifact",
+                  "- Cache tuning so the pipeline stays under two minutes"
+                ].join("\n")
+              },
+              {
+                title: "Containerised deployment and environment config (Phase 6)",
+                milestone: M6,
+                body: [
+                  "## Goal",
+                  "",
+                  "Ship a repeatable deployment.",
+                  "",
+                  "## Scope",
+                  "",
+                  "- Multi-stage Dockerfiles for backend and frontend",
+                  "- Production compose with Postgres/pgvector, migrations on boot",
+                  "- Health checks, structured logging, environment documentation"
+                ].join("\n")
+              }
+            ];
+
+            const existing = await github.rest.issues.listForRepo({
+              owner, repo, state: "all", per_page: 100
+            });
+            const titles = new Set(
+              existing.data.filter((i) => !i.pull_request).map((i) => i.title)
+            );
+            for (const spec of specs) {
+              if (titles.has(spec.title)) {
+                console.log("already exists: " + spec.title);
+                continue;
+              }
+              const created = await github.rest.issues.create({
+                owner, repo, title: spec.title, body: spec.body, milestone: spec.milestone
+              });
+              console.log("created issue #" + created.data.number + ": " + spec.title);
+            }
