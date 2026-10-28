@@ -25,11 +25,11 @@ jobs:
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
             // 1. Milestone on the Phase 3.3 issue
-            await github.issues.update({ owner, repo, issue_number: 16, milestone: M3 });
+            await github.rest.issues.update({ owner, repo, issue_number: 16, milestone: M3 });
             console.log("issue #16 milestone set");
 
             // 2. Open the pull request (idempotent)
-            const listed = await github.pulls.list({
+            const listed = await github.rest.pulls.list({
               owner, repo, state: "all", head: owner + ":" + branch, per_page: 10
             });
             let pr = listed.data[0];
@@ -44,7 +44,7 @@ jobs:
               "Closes #16"
             ].join("\n");
             if (!pr) {
-              pr = (await github.pulls.create({
+              pr = (await github.rest.pulls.create({
                 owner, repo, base: "dev", head: branch,
                 title: "pgvector retrieval (Phase 3.3)", body: prBody
               })).data;
@@ -54,17 +54,17 @@ jobs:
             }
 
             // 3. Milestone on the pull request
-            await github.issues.update({ owner, repo, issue_number: pr.number, milestone: M3 });
+            await github.rest.issues.update({ owner, repo, issue_number: pr.number, milestone: M3 });
 
             // 4. Merge it (mergeable state may need a moment)
             for (let attempt = 0; attempt < 10; attempt++) {
-              const current = await github.pulls.get({ owner, repo, pull_number: pr.number });
+              const current = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
               if (current.data.merged) {
                 console.log("PR #" + pr.number + " already merged");
                 break;
               }
               try {
-                await github.pulls.merge({
+                await github.rest.pulls.merge({
                   owner, repo, pull_number: pr.number, merge_method: "merge"
                 });
                 console.log("merged PR #" + pr.number);
@@ -169,7 +169,7 @@ jobs:
               }
             ];
 
-            const existing = await github.issues.listForRepo({
+            const existing = await github.rest.issues.listForRepo({
               owner, repo, state: "all", per_page: 100
             });
             const titles = new Set(
@@ -180,7 +180,7 @@ jobs:
                 console.log("already exists: " + spec.title);
                 continue;
               }
-              const created = await github.issues.create({
+              const created = await github.rest.issues.create({
                 owner, repo, title: spec.title, body: spec.body, milestone: spec.milestone
               });
               console.log("created issue #" + created.data.number + ": " + spec.title);
