@@ -42,6 +42,23 @@ def error_response(
     )
 
 
+def _json_safe(value: Any) -> Any:
+    """Convert validation details into JSON-safe values.
+
+    Pydantic puts raised exceptions into an error's ``ctx``, which the
+    response encoder cannot serialize, so validator messages are flattened
+    to strings here.
+    """
+
+    if isinstance(value, Exception):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach the project-wide exception handlers to an application."""
 
@@ -70,7 +87,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             422,
             "validation_error",
             "Request validation failed.",
-            exc.errors(),
+            _json_safe(exc.errors()),
         )
 
     @app.exception_handler(Exception)

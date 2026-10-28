@@ -243,6 +243,42 @@ PDFs are not OCR'd in this phase.
 text length, and format-specific fields such as title, author, producer,
 encoding, paragraph count, and table count.
 
+### `POST /api/documents/{id}/search`
+
+Embed the query with the provider selected by `EMBEDDING_PROVIDER` and return
+the document's most similar chunks with cosine similarity scores. Only
+documents in the `ready` state are searchable.
+
+**Request:**
+
+```json
+{
+  "query": "What is the refund policy?",
+  "limit": 5
+}
+```
+
+**200 OK:**
+
+```json
+{
+  "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "query": "What is the refund policy?",
+  "results": [
+    {
+      "chunk_id": "3f0a9d2c-5f9a-4d0f-9a1e-2b7c8d6e5f41",
+      "chunk_index": 4,
+      "page_number": 2,
+      "score": 0.8123,
+      "content": "Refunds are issued within 14 days of purchase."
+    }
+  ]
+}
+```
+
+**Errors:** `404` unknown or foreign document, `409` document not ready or
+embeddings disabled, `422` blank query or `limit` outside 1-20.
+
 ## Planned endpoints
 
 These are contracts reserved for later phases and are **not implemented yet**.
