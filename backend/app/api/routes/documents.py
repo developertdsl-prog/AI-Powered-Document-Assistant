@@ -15,17 +15,22 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import Settings, get_settings
-from app.core.exceptions import DocumentNotReadyError
+from app.core.exceptions import DocumentNotReadyError, EmbeddingsUnavailableError
 from app.db.session import get_db
 from app.models import Document, User
 from app.schemas.common import ErrorResponse
 from app.schemas.document import (
+    ChunkSearchRequest,
+    ChunkSearchResponse,
+    ChunkSearchResult,
     DocumentListResponse,
     DocumentPageResponse,
     DocumentResponse,
     DocumentTextResponse,
 )
 from app.services import documents as document_service
+from app.services import retrieval as retrieval_service
+from app.services.embeddings import get_embedding_provider
 from app.services.processing import process_document_in_background
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -162,5 +167,67 @@ def get_document_text(
                 metadata=page.page_metadata,
             )
             for page in pages
+        ],
+    )
+
+
+@router.post(
+    "/{document_id}/search",
+    response_model=ChunkSearchResponse,
+    summary="Search a document's chunks",
+    responses={
+        404: {"model": ErrorResponse, "description": "Document not found."},
+        409: {
+            "model": ErrorResponse,
+            "description": (
+                "Document has not finished processing, or embeddings "
+                "are disabled."
+            ),
+        },
+    },
+)
+def search_document_chunks(
+    document_id: UUID,
+    payload: ChunkSearchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> ChunkSearchResponse:
+    """Embed the query and rank the document's chunks by cosine similarity."""
+
+    document = document_service.get_document(
+        db,
+        owner_id=current_user.id,
+        document_id=document_id,
+    )
+
+    if document.status != "ready":
+        raise DocumentNotReadyError(document.status)
+
+    provider = get_embedding_provider(settings)
+    if provider is None:
+        raise EmbeddingsUnavailableError()
+
+    (query_vector,) = provider.embed_texts([payload.query])
+
+    matches = retrieval_service.search_document_chunks(
+        db,
+        document_id=document.id,
+        query_vector=query_vector,
+        limit=payload.limit,
+    )
+
+    return ChunkSearchResponse(
+        document_id=document.id,
+        query=payload.query,
+        results=[
+            ChunkSearchResult(
+                chunk_id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                page_number=chunk.page_number,
+                score=score,
+                content=chunk.content,
+            )
+            for chunk, score in matches
         ],
     )

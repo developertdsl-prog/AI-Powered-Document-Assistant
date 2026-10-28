@@ -82,3 +82,17 @@ class DocumentNotReadyError(AppError):
                 "Try again shortly."
             )
         super().__init__(message)
+
+
+class EmbeddingsUnavailableError(AppError):
+    status_code = 409
+    code = "embeddings_unavailable"
+
+    def __init__(
+        self,
+        message: str = (
+            "Search is unavailable because embeddings are disabled "
+            "on this server."
+        ),
+    ) -> None:
+        super().__init__(message)

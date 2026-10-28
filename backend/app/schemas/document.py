@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DocumentResponse(BaseModel):
@@ -48,3 +48,45 @@ class DocumentTextResponse(BaseModel):
     page_count: int | None
     metadata: dict[str, Any] | None
     pages: list[DocumentPageResponse]
+
+
+class ChunkSearchRequest(BaseModel):
+    """Natural language query used to rank a document's chunks."""
+
+    query: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Question or search phrase to match against the chunks.",
+    )
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of chunks to return.",
+    )
+
+    @field_validator("query")
+    @classmethod
+    def _reject_blank_query(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("The query must not be blank.")
+        return stripped
+
+
+class ChunkSearchResult(BaseModel):
+    """One retrieved chunk with its similarity score."""
+
+    chunk_id: UUID
+    chunk_index: int
+    page_number: int | None
+    score: float
+    content: str
+
+
+class ChunkSearchResponse(BaseModel):
+    """Ranked chunk matches for a document query."""
+
+    document_id: UUID
+    query: str
+    results: list[ChunkSearchResult]
