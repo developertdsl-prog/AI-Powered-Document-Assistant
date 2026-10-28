@@ -44,20 +44,33 @@ jobs:
               "Closes #16"
             ].join("\n");
             if (!pr) {
-              pr = (await github.rest.pulls.create({
-                owner, repo, base: "dev", head: branch,
-                title: "pgvector retrieval (Phase 3.3)", body: prBody
-              })).data;
-              console.log("opened PR #" + pr.number);
+              try {
+                pr = (await github.rest.pulls.create({
+                  owner, repo, base: "dev", head: branch,
+                  title: "pgvector retrieval (Phase 3.3)", body: prBody
+                })).data;
+                console.log("opened PR #" + pr.number);
+              } catch (err) {
+                console.log("PR creation unavailable: " + err.message);
+                const again = await github.rest.pulls.list({
+                  owner, repo, state: "all", head: owner + ":" + branch, per_page: 10
+                });
+                pr = again.data[0] || null;
+              }
             } else {
               console.log("PR #" + pr.number + " already exists");
             }
 
             // 3. Milestone on the pull request
-            await github.rest.issues.update({ owner, repo, issue_number: pr.number, milestone: M3 });
+            if (pr) {
+              await github.rest.issues.update({ owner, repo, issue_number: pr.number, milestone: M3 });
+              console.log("milestone set on PR #" + pr.number);
+            } else {
+              console.log("no pull request yet; milestone deferred");
+            }
 
             // 4. Merge it (mergeable state may need a moment)
-            for (let attempt = 0; attempt < 10; attempt++) {
+            for (let attempt = 0; pr && attempt < 10; attempt++) {
               const current = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
               if (current.data.merged) {
                 console.log("PR #" + pr.number + " already merged");
