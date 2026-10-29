@@ -18,7 +18,6 @@ from app.api.deps import get_current_user
 from app.core.config import Settings, get_settings
 from app.core.exceptions import (
     AnswerProviderError,
-    AnswersUnavailableError,
     DocumentNotReadyError,
     EmbeddingsUnavailableError,
 )
@@ -286,28 +285,10 @@ def answer_document_question(
         raise DocumentNotReadyError(document.status)
 
     try:
-        mode = answer_service.get_answer_mode(settings)
-    except answer_service.LLMError as exc:
-        raise AnswerProviderError() from exc
-
-    if mode is None:
-        raise AnswersUnavailableError()
-
-    embedding_provider = get_embedding_provider(settings)
-    if embedding_provider is None:
-        raise EmbeddingsUnavailableError(
-            "Answers are unavailable because embeddings are disabled "
-            "on this server."
-        )
-
-    (query_vector,) = embedding_provider.embed_texts([payload.question])
-
-    try:
-        result = answer_service.generate_answer(
+        result = answer_service.answer_question(
             db,
             document=document,
             question=payload.question,
-            query_vector=query_vector,
             settings=settings,
             limit=payload.limit,
         )

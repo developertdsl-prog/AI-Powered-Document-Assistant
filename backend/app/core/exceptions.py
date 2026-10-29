@@ -34,6 +34,28 @@ class DocumentNotFoundError(AppError):
         super().__init__(message)
 
 
+class ConversationNotFoundError(AppError):
+    status_code = 404
+    code = "not_found"
+
+    def __init__(self, message: str = "Conversation not found.") -> None:
+        super().__init__(message)
+
+
+class ConversationWithoutDocumentError(AppError):
+    status_code = 400
+    code = "bad_request"
+
+    def __init__(
+        self,
+        message: str = (
+            "This conversation is not linked to a document, "
+            "so it cannot be answered."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
 class UnsupportedFileTypeError(AppError):
     status_code = 415
     code = "unsupported_media_type"
