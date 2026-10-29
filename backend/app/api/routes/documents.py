@@ -1,5 +1,6 @@
-"""Document upload, listing, detail, and extracted-text routes."""
+"""Document upload, listing, detail, extracted-text, and answer routes."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import (
@@ -15,9 +16,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import Settings, get_settings
-from app.core.exceptions import DocumentNotReadyError, EmbeddingsUnavailableError
+from app.core.exceptions import (
+    AnswerProviderError,
+    AnswersUnavailableError,
+    DocumentNotReadyError,
+    EmbeddingsUnavailableError,
+)
 from app.db.session import get_db
 from app.models import Document, User
+from app.schemas.answer import AnswerCitation, AnswerRequest, AnswerResponse
 from app.schemas.common import ErrorResponse
 from app.schemas.document import (
     ChunkSearchRequest,
@@ -28,6 +35,7 @@ from app.schemas.document import (
     DocumentResponse,
     DocumentTextResponse,
 )
+from app.services import answers as answer_service
 from app.services import documents as document_service
 from app.services import retrieval as retrieval_service
 from app.services.embeddings import get_embedding_provider
@@ -230,4 +238,99 @@ def search_document_chunks(
             )
             for chunk, score in matches
         ],
+    )
+
+
+_ANSWER_ERROR_RESPONSES = {
+    404: {"model": ErrorResponse, "description": "Document not found."},
+    409: {
+        "model": ErrorResponse,
+        "description": (
+            "Document has not finished processing, or answer generation "
+            "is unavailable on this server."
+        ),
+    },
+    503: {
+        "model": ErrorResponse,
+        "description": "The answer provider is unavailable.",
+    },
+}
+
+
+@router.post(
+    "/{document_id}/answers",
+    response_model=AnswerResponse,
+    summary="Answer a question about a document",
+    responses=_ANSWER_ERROR_RESPONSES,
+)
+def answer_document_question(
+    document_id: UUID,
+    payload: AnswerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> AnswerResponse:
+    """Retrieve evidence for the question and answer from it only.
+
+    The reply cites the passages it used; ``grounded`` is true when at least
+    one passage really supports the answer, and false for refusals.
+    """
+
+    document = document_service.get_document(
+        db,
+        owner_id=current_user.id,
+        document_id=document_id,
+    )
+
+    if document.status != "ready":
+        raise DocumentNotReadyError(document.status)
+
+    try:
+        mode = answer_service.get_answer_mode(settings)
+    except answer_service.LLMError as exc:
+        raise AnswerProviderError() from exc
+
+    if mode is None:
+        raise AnswersUnavailableError()
+
+    embedding_provider = get_embedding_provider(settings)
+    if embedding_provider is None:
+        raise EmbeddingsUnavailableError(
+            "Answers are unavailable because embeddings are disabled "
+            "on this server."
+        )
+
+    (query_vector,) = embedding_provider.embed_texts([payload.question])
+
+    try:
+        result = answer_service.generate_answer(
+            db,
+            document=document,
+            question=payload.question,
+            query_vector=query_vector,
+            settings=settings,
+            limit=payload.limit,
+        )
+    except answer_service.LLMError as exc:
+        raise AnswerProviderError() from exc
+
+    return AnswerResponse(
+        document_id=document.id,
+        question=payload.question,
+        answer=result.answer,
+        grounded=result.grounded,
+        citations=[
+            AnswerCitation(
+                reference=item.reference,
+                chunk_id=item.chunk_id,
+                chunk_index=item.chunk_index,
+                page_number=item.page_number,
+                score=item.score,
+                excerpt=item.content[: settings.answer_excerpt_chars],
+            )
+            for item in result.citations
+        ],
+        provider=result.provider,
+        evidence_count=result.evidence_count,
+        generated_at=datetime.now(UTC),
     )

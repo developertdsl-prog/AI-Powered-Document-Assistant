@@ -4,8 +4,9 @@ Upload PDF, DOCX, and TXT documents, ask questions about their content, and get
 answers grounded in the source files with citations.
 
 This repository is built incrementally in six phases. The current state covers
-**Phase 3 - AI and retrieval pipeline** (chunking complete; embeddings and
-retrieval in progress).
+**Phase 3 - AI and retrieval pipeline**: chunking, embeddings, similarity
+search, and grounded answer generation. **Phase 4 - User-facing AI features**
+is next.
 
 ## Status
 
@@ -17,8 +18,11 @@ retrieval in progress).
 | 2.1 | Upload UI with drag-and-drop, progress, and status | Complete |
 | 2.2 | Upload API, validation, ownership, and storage | Complete |
 | 2.3 | Parsing, metadata, processing status, and error handling | Complete |
-| 3 | AI and retrieval pipeline | In progress |
-| 4 | User-facing AI features | Planned |
+| 3.1 | Paragraph-aware chunking pipeline | Complete |
+| 3.2 | pgvector embeddings for document chunks | Complete |
+| 3.3 | Similarity search over embedded chunks | Complete |
+| 3.4 | Grounded answer generation with citations | Complete |
+| 4 | User-facing AI features | Next |
 | 5 | Security, testing, reliability | Planned |
 | 6 | Deployment and delivery | Planned |
 
@@ -145,6 +149,21 @@ npm run test
 npm run build
 ```
 
+### Continuous integration
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same checks on every pull
+request into `dev` or `main` and on pushes to those branches:
+
+- **Backend checks** - `ruff check .` and `pytest`.
+- **PostgreSQL migrations** - replays every Alembic migration up and down
+  against a `pgvector/pgvector:pg16` service, verifying the `vector` extension
+  and the HNSW cosine index that SQLite cannot create
+  (`TEST_DATABASE_URL`; skipped when unset, e.g. in local runs).
+- **Frontend checks** - `npm run typecheck`, `npm run lint`, `npm test`.
+
+Runs for the same branch or pull request cancel automatically when a newer
+push arrives, and every job has a timeout.
+
 ### Uploads and processing
 
 - Stored files live under `backend/uploads/` by owner and are gitignored.
@@ -167,6 +186,13 @@ npm run build
   otherwise a deterministic offline hash provider; `none` skips vectors).
   The chosen provider is recorded in the document's metadata, and an
   embedding failure marks the document `failed` with a user-facing message.
+- Questions are answered from retrieved evidence only
+  (`POST /api/documents/{id}/answers`). `LLM_PROVIDER` defaults to `auto`:
+  an OpenAI-compatible chat model when `OPENAI_API_KEY` is set, otherwise an
+  offline extractive provider that quotes the matching sentences. Every reply
+  cites the passages it used, citations the model invents are dropped, and a
+  question with no supporting passage returns a fixed refusal with
+  `grounded: false`.
 
 Migration commands:
 
@@ -207,6 +233,14 @@ alembic current           # show the applied revision
 | `OPENAI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible embeddings endpoint |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Base URL of the embeddings endpoint (OpenAI-compatible services work here) |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model; width must stay 1536 to match the schema |
+| `LLM_PROVIDER` | `auto` | `auto` (OpenAI when a key is set, otherwise offline extractive answers), `openai`, `extractive`, or `none` |
+| `LLM_MODEL` | `gpt-4o-mini` | Chat model used for grounded answers |
+| `LLM_MAX_TOKENS` | `700` | Maximum tokens requested per answer |
+| `LLM_TIMEOUT_SECONDS` | `60` | Answer provider request timeout |
+| `ANSWER_CONTEXT_CHUNKS` | `6` | Passages retrieved as evidence when the request omits `limit` |
+| `ANSWER_MIN_SIMILARITY` | `0.0` | Drop evidence below this cosine score; keep `0.0` with the offline hash embeddings, whose scores are not comparable |
+| `ANSWER_MAX_CONTEXT_CHARS` | `8000` | Character budget for the passages sent to the model |
+| `ANSWER_EXCERPT_CHARS` | `300` | Length of the `excerpt` returned with each citation |
 
 Never commit a real `.env` file. Only `.env.example` files belong in Git.
 

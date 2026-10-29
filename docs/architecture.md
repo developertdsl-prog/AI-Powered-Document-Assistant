@@ -96,6 +96,27 @@ types (`Uuid`, `JSON`, `String`). The pgvector `embedding` column is a
 tests stay on SQLite; the `vector` extension and the HNSW cosine index are
 created only on PostgreSQL.
 
+## Retrieval and answer pipeline
+
+Answering a question runs in four steps, all inside the backend:
+
+1. The question is embedded with the provider selected by `EMBEDDING_PROVIDER`
+   and compared against the document's chunk vectors (`app/services/retrieval.py`).
+2. The best chunks become numbered evidence, optionally filtered by
+   `ANSWER_MIN_SIMILARITY` (`app/services/answers.py`).
+3. Evidence is packed into a prompt under `ANSWER_MAX_CONTEXT_CHARS`. The
+   system prompt states that the passages are untrusted document content, so
+   text inside a document cannot override the instructions.
+4. The provider selected by `LLM_PROVIDER` answers: an OpenAI-compatible chat
+   endpoint when a key is configured, or the offline extractive provider that
+   quotes matching sentences. References in the reply are matched against the
+   evidence that was actually supplied; invented references are dropped.
+
+If no passage is retrieved, the service refuses with a fixed answer instead of
+asking a model to guess, and `grounded` is `false`. Answer generation never
+runs outside the owner's document: ownership and processing status are checked
+before retrieval.
+
 ## Health checks
 
 `GET /api/health` reports the service status, version, environment, and database
