@@ -47,6 +47,8 @@ All non-2xx responses use one envelope:
 | 405 | `method_not_allowed` | Method not supported for this path |
 | 409 | `conflict` | State conflict (for example a duplicate email) |
 | 409 | `document_not_ready` | Extracted text was requested before processing finished |
+| 409 | `embeddings_unavailable` | Embeddings are disabled, so retrieval cannot run |
+| 409 | `answers_unavailable` | Answer generation is disabled on this server |
 | 413 | `file_too_large` | Upload exceeds the configured limit (Phase 2) |
 | 415 | `unsupported_media_type` | File type is not allowed (Phase 2) |
 | 422 | `validation_error` | Request body or query validation failed |
@@ -278,6 +280,74 @@ documents in the `ready` state are searchable.
 
 **Errors:** `404` unknown or foreign document, `409` document not ready or
 embeddings disabled, `422` blank query or `limit` outside 1-20.
+
+### `POST /api/documents/{id}/answers`
+
+Answer a question about a document using only passages retrieved from it
+(grounded answer generation, Phase 3.4). Only documents in the `ready` state
+can be asked.
+
+**Request:**
+
+```json
+{
+  "question": "What is the refund policy?",
+  "limit": 6
+}
+```
+
+| Name | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `question` | string | _(required)_ | 1 to 2000 characters, must not be blank |
+| `limit` | integer | `6` | Passages retrieved as evidence, 1 to 20 |
+
+**200 OK:**
+
+```json
+{
+  "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "question": "What is the refund policy?",
+  "answer": "Refunds are issued within 14 days of purchase.",
+  "grounded": true,
+  "citations": [
+    {
+      "reference": 1,
+      "chunk_id": "3f0a9d2c-5f9a-4d0f-9a1e-2b7c8d6e5f41",
+      "chunk_index": 4,
+      "page_number": 2,
+      "score": 0.8123,
+      "excerpt": "Refunds are issued within 14 days of purchase."
+    }
+  ],
+  "provider": "extractive",
+  "evidence_count": 5,
+  "generated_at": "2026-10-29T09:42:00Z"
+}
+```
+
+- `citations` reference the numbered passages supplied to the model. A number
+  the model invented is dropped, so a citation always points at a real chunk.
+- `grounded` is `true` when at least one passage supports the answer.
+- When no passage supports the question, `answer` is the fixed refusal text
+  ("The document does not contain enough information to answer this
+  question."), `grounded` is `false`, and `citations` is empty.
+- `provider` is the answering mode that produced the reply: `openai` for the
+  configured OpenAI-compatible endpoint, `extractive` for the offline
+  quotation fallback used when no API key is set.
+- `evidence_count` is how many passages were retrieved, cited or not.
+- Document text is untrusted input: the prompt instructs the model to ignore
+  instructions found inside the document.
+
+**Errors:**
+
+| Status | Code | When |
+| --- | --- | --- |
+| 404 | `not_found` | Document does not exist or belongs to another user |
+| 409 | `document_not_ready` | Document is `pending`, `processing`, or `failed` |
+| 409 | `embeddings_unavailable` | Embeddings are disabled, so evidence cannot be retrieved |
+| 409 | `answers_unavailable` | `LLM_PROVIDER=none` disables answer generation |
+| 422 | `validation_error` | Blank or oversized question, or `limit` outside 1-20 |
+| 503 | `service_unavailable` | The configured answer provider failed or is misconfigured |
 
 ## Planned endpoints
 

@@ -96,3 +96,29 @@ class EmbeddingsUnavailableError(AppError):
         ),
     ) -> None:
         super().__init__(message)
+
+
+class AnswersUnavailableError(AppError):
+    status_code = 409
+    code = "answers_unavailable"
+
+    def __init__(
+        self,
+        message: str = (
+            "Answer generation is disabled on this server."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class AnswerProviderError(AppError):
+    status_code = 503
+    code = "service_unavailable"
+
+    def __init__(
+        self,
+        message: str = (
+            "The answer provider could not be reached. Try again shortly."
+        ),
+    ) -> None:
+        super().__init__(message)

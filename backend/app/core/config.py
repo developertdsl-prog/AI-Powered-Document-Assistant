@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openai_embedding_model: str = "text-embedding-3-small"
+    llm_provider: str = "auto"
+    llm_model: str = "gpt-4o-mini"
+    llm_max_tokens: int = 700
+    llm_timeout_seconds: float = 60.0
+    answer_context_chunks: int = 6
+    answer_min_similarity: float = 0.0
+    answer_max_context_chars: int = 8000
+    answer_excerpt_chars: int = 300
 
     @property
     def is_development(self) -> bool:

@@ -18,7 +18,7 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 | Chunking pipeline | 3.1 | `10-chunking-pipeline` | `dev` | `milestone-3.1-chunking` |
 | Embeddings | 3.2 | `11-embeddings-pgvector` | `dev` | `milestone-3.2-embeddings` |
 | pgvector retrieval | 3.3 | `12-pgvector-retrieval-similarity-search-api` | `dev` | `milestone-3.3-retrieval` |
-| Grounded answer generation | 3.4 | _(planned)_ | `dev` | `milestone-3.4-answers` (planned) |
+| Grounded answer generation | 3.4 | `13-grounded-answer-generation` | `dev` | `milestone-3.4-answers` (planned) |
 | User-facing AI features | 4 | _(planned)_ | `dev` | `milestone-4-ai-features` (planned) |
 | Security, testing, reliability | 5 | _(planned)_ | `dev` | `milestone-5-security-testing` (planned) |
 | Deployment and delivery | 6 | _(planned)_ | `dev` | `milestone-6-deployment` (planned) |

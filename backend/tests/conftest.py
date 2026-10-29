@@ -64,6 +64,10 @@ def app_settings(tmp_path: Path) -> Settings:
         dev_user_email="tester@example.com",
         dev_user_name="Tester",
         process_uploads_in_background=False,
+        # Pin the offline providers so tests never depend on an API key that
+        # happens to be set in the developer's environment.
+        embedding_provider="hash",
+        llm_provider="extractive",
     )
 
 
