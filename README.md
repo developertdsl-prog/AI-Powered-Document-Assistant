@@ -22,7 +22,9 @@ is next.
 | 3.2 | pgvector embeddings for document chunks | Complete |
 | 3.3 | Similarity search over embedded chunks | Complete |
 | 3.4 | Grounded answer generation with citations | Complete |
-| 4 | User-facing AI features | Next |
+| 4.1 | Document chat with cited answers and history | Complete |
+| 4.2 | Summaries and structured extractions | Next |
+| 4.3 | Search and delete | Planned |
 | 5 | Security, testing, reliability | Planned |
 | 6 | Deployment and delivery | Planned |
 
