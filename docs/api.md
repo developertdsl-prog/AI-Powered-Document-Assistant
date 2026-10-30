@@ -349,6 +349,176 @@ can be asked.
 | 422 | `validation_error` | Blank or oversized question, or `limit` outside 1-20 |
 | 503 | `service_unavailable` | The configured answer provider failed or is misconfigured |
 
+## Conversations
+
+Conversation history for document chat (Phase 4.1). Every conversation belongs
+to the current user and, for answering, to exactly one document. Another user's
+conversation is indistinguishable from a missing one (`404`).
+
+### `GET /api/conversations`
+
+List the current user's conversations, most recently active first.
+
+| Name | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `limit` | integer | `50` | Page size, 1 to 100 |
+| `offset` | integer | `0` | Rows to skip |
+
+**200 OK:**
+
+```json
+{
+  "items": [
+    {
+      "id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+      "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+      "title": "What is the refund policy?",
+      "created_at": "2026-10-29T09:40:00Z",
+      "updated_at": "2026-10-29T09:42:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+### `POST /api/conversations`
+
+Start a conversation about a document owned by the current user. The document
+must exist; it does not have to be `ready` yet (asking before processing
+finishes returns `409`).
+
+**Request:**
+
+```json
+{
+  "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "title": "Refund questions"
+}
+```
+
+| Name | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `document_id` | UUID | _(required)_ | Document the conversation asks about |
+| `title` | string | `New conversation` | 1 to 255 characters, must not be blank |
+
+**201 Created** returns the conversation as shown above. Unless a title is
+supplied, the first question asked retitles the conversation.
+
+**Errors:** `404` unknown or foreign document, `422` blank title.
+
+### `GET /api/conversations/{id}`
+
+Return one conversation with its message history in reading order.
+
+**200 OK:**
+
+```json
+{
+  "id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+  "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "title": "What is the refund policy?",
+  "created_at": "2026-10-29T09:40:00Z",
+  "updated_at": "2026-10-29T09:42:00Z",
+  "messages": [
+    {
+      "id": "0a5e2f77-93ab-4e4c-8a5d-4e8f0d2c6b91",
+      "conversation_id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+      "role": "user",
+      "content": "What is the refund policy?",
+      "position": 1,
+      "citations": [],
+      "created_at": "2026-10-29T09:40:00Z"
+    },
+    {
+      "id": "1b6f3a88-04bc-4f5d-9b6e-5f9a1e3d7c02",
+      "conversation_id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+      "role": "assistant",
+      "content": "Refunds are issued within 14 days of purchase.",
+      "position": 2,
+      "citations": [
+        {
+          "reference": 1,
+          "chunk_id": "3f0a9d2c-5f9a-4d0f-9a1e-2b7c8d6e5f41",
+          "chunk_index": 4,
+          "page_number": 2,
+          "score": 0.8123,
+          "excerpt": "Refunds are issued within 14 days of purchase."
+        }
+      ],
+      "created_at": "2026-10-29T09:42:00Z"
+    }
+  ]
+}
+```
+
+- `position` is the message's order inside the conversation; use it instead of
+  `created_at`, which can tie between a question and its reply.
+- `citations` is empty for user turns; assistant turns cite the passages that
+  support the answer, with the same semantics as
+  `POST /api/documents/{id}/answers`.
+
+**Errors:** `404` unknown or foreign conversation.
+
+### `POST /api/conversations/{id}/messages`
+
+Ask a question and receive a grounded, cited answer. Both turns are persisted,
+so `GET /api/conversations/{id}` replays the full history. The answer pipeline
+is the same as `POST /api/documents/{id}/answers` (retrieval, numbered
+evidence, refusal when nothing supports the answer).
+
+**Request:** the answers shape — `question` (required, 1 to 2000 characters)
+and optional `limit` (1 to 20, default `6`).
+
+**200 OK:**
+
+```json
+{
+  "conversation_id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+  "user_message": {
+    "id": "0a5e2f77-93ab-4e4c-8a5d-4e8f0d2c6b91",
+    "conversation_id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+    "role": "user",
+    "content": "What is the refund policy?",
+    "position": 1,
+    "citations": [],
+    "created_at": "2026-10-29T09:40:00Z"
+  },
+  "assistant_message": {
+    "id": "1b6f3a88-04bc-4f5d-9b6e-5f9a1e3d7c02",
+    "conversation_id": "6c1b9c1e-7d5a-4c2e-9a63-2c5f0b1a8d44",
+    "role": "assistant",
+    "content": "Refunds are issued within 14 days of purchase.",
+    "position": 2,
+    "citations": [
+      {
+        "reference": 1,
+        "chunk_id": "3f0a9d2c-5f9a-4d0f-9a1e-2b7c8d6e5f41",
+        "chunk_index": 4,
+        "page_number": 2,
+        "score": 0.8123,
+        "excerpt": "Refunds are issued within 14 days of purchase."
+      }
+    ],
+    "created_at": "2026-10-29T09:42:00Z"
+  }
+}
+```
+
+Nothing is persisted when answer generation fails, so a `503` leaves the
+history unchanged.
+
+**Errors:**
+
+| Status | Code | When |
+| --- | --- | --- |
+| 400 | `bad_request` | The conversation has no linked document |
+| 404 | `not_found` | Conversation or its document does not exist or belongs to another user |
+| 409 | `document_not_ready` | The linked document is `pending`, `processing`, or `failed` |
+| 409 | `embeddings_unavailable` | Embeddings are disabled, so evidence cannot be retrieved |
+| 409 | `answers_unavailable` | `LLM_PROVIDER=none` disables answer generation |
+| 422 | `validation_error` | Blank or oversized question |
+| 503 | `service_unavailable` | The configured answer provider failed or is misconfigured |
+
 ## Planned endpoints
 
 These are contracts reserved for later phases and are **not implemented yet**.
@@ -358,9 +528,6 @@ These are contracts reserved for later phases and are **not implemented yet**.
 | 2 | `DELETE` | `/api/documents/{id}` | Delete a document |
 | 4 | `POST` | `/api/documents/{id}/summaries` | Generate a summary |
 | 4 | `POST` | `/api/documents/{id}/extractions` | Extract structured fields |
-| 4 | `GET` | `/api/conversations` | List conversations |
-| 4 | `POST` | `/api/conversations` | Create a conversation |
-| 4 | `POST` | `/api/conversations/{id}/messages` | Ask a question and receive a cited answer |
 | 5 | `POST` | `/api/auth/register` | Create an account |
 | 5 | `POST` | `/api/auth/login` | Obtain an access token |
 
@@ -389,7 +556,8 @@ conversations
   title, created_at, updated_at
 
 messages
-  id, conversation_id -> conversations.id, role, content, citations, created_at
+  id, conversation_id -> conversations.id, role, content, position,
+  citations, created_at
 ```
 
 Document `status` values: `pending`, `processing`, `ready`, `failed`.

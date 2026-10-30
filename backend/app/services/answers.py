@@ -26,8 +26,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.core.exceptions import AnswersUnavailableError
+from app.core.exceptions import AnswersUnavailableError, EmbeddingsUnavailableError
 from app.models import Document, DocumentChunk
+from app.services.embeddings import get_embedding_provider
 from app.services.llm import LLMError, get_chat_provider
 from app.services.retrieval import search_document_chunks
 
@@ -360,4 +361,44 @@ def generate_answer(
         provider=mode,
         citations=citations,
         evidence_count=len(evidence),
+    )
+
+
+def answer_question(
+    db: Session,
+    *,
+    document: Document,
+    question: str,
+    settings: Settings,
+    limit: int | None = None,
+) -> AnswerResult:
+    """Run the full answer pipeline for a ready document.
+
+    Provider and embedding configuration are validated here so every entry
+    point (document answers, conversation messages) reports the same errors:
+    ``409`` when a feature is disabled, ``503`` as :class:`LLMError` when the
+    configured provider cannot run. Ownership and processing status stay with
+    the caller.
+    """
+
+    mode = get_answer_mode(settings)
+    if mode is None:
+        raise AnswersUnavailableError()
+
+    embedding_provider = get_embedding_provider(settings)
+    if embedding_provider is None:
+        raise EmbeddingsUnavailableError(
+            "Answers are unavailable because embeddings are disabled "
+            "on this server."
+        )
+
+    (query_vector,) = embedding_provider.embed_texts([question])
+
+    return generate_answer(
+        db,
+        document=document,
+        question=question,
+        query_vector=query_vector,
+        settings=settings,
+        limit=limit,
     )

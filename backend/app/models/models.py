@@ -22,6 +22,9 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy import (
+    text as sa_text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import EMBEDDING_DIMENSIONS
@@ -200,7 +203,7 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="conversation",
         cascade="all, delete-orphan",
         passive_deletes=True,
-        order_by="Message.created_at",
+        order_by="Message.position, Message.created_at",
     )
 
 
@@ -217,7 +220,15 @@ class Message(Base, UUIDPrimaryKeyMixin):
     )
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    citations: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # Order inside the conversation. created_at cannot provide it: both
+    # messages of one exchange share the same transaction timestamp.
+    position: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=sa_text("0"),
+        nullable=False,
+    )
+    citations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -230,5 +241,9 @@ class Message(Base, UUIDPrimaryKeyMixin):
         CheckConstraint(
             "role IN ('user','assistant','system')",
             name="ck_messages_role",
+        ),
+        CheckConstraint(
+            "position >= 0",
+            name="ck_messages_position",
         ),
     )
