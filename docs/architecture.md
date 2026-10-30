@@ -117,6 +117,23 @@ asking a model to guess, and `grounded` is `false`. Answer generation never
 runs outside the owner's document: ownership and processing status are checked
 before retrieval.
 
+## Summary and extraction pipeline
+
+Summaries (`POST /api/documents/{id}/summaries`) and extraction
+(`POST /api/documents/{id}/extractions`) skip retrieval: the document's chunks
+are read in order and packed into the prompt under
+`SUMMARY_MAX_CONTEXT_CHARS` (`app/services/insights.py`), which reports
+`truncated` when the document was longer than that budget. No query vector is
+involved, so both keep working while embeddings are disabled.
+
+Provider selection is the shared `LLM_PROVIDER` switch. The offline mode quotes
+the document's opening sentences for a summary and pattern-matches dates,
+capitalized names, and `name: value` fields, so it never invents text. A
+configured model must answer extraction with a single JSON object that
+`parse_extraction` validates; anything else becomes a `503` instead of an
+empty result. Ownership and processing status are checked by the route before
+the service runs, exactly as for answers.
+
 ## Health checks
 
 `GET /api/health` reports the service status, version, environment, and database
