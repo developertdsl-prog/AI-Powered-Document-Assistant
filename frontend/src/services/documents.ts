@@ -100,10 +100,23 @@ export function uploadDocument(
   });
 }
 
+export interface ListDocumentsOptions {
+  /** Case-insensitive substring the filename must contain. */
+  query?: string;
+}
+
 export async function listDocuments(
   signal?: AbortSignal,
+  options: ListDocumentsOptions = {},
 ): Promise<DocumentListResponse> {
-  const response = await fetch(`${apiBaseUrl}/api/documents?limit=100`, {
+  const params = new URLSearchParams({ limit: "100" });
+  const query = options.query?.trim();
+
+  if (query) {
+    params.set("q", query);
+  }
+
+  const response = await fetch(`${apiBaseUrl}/api/documents?${params}`, {
     signal,
   });
 
@@ -112,6 +125,22 @@ export async function listDocuments(
   }
 
   return (await response.json()) as DocumentListResponse;
+}
+
+export async function deleteDocument(
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<{ message: string }> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/documents/${encodeURIComponent(documentId)}`,
+    { method: "DELETE", signal },
+  );
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(response);
+  }
+
+  return (await response.json()) as { message: string };
 }
 
 export async function getDocument(

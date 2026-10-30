@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   FileText,
   RefreshCw,
+  Search,
+  SearchX,
   Upload,
   X,
 } from "lucide-react";
@@ -22,11 +24,16 @@ import { UploadDropzone } from "@/components/documents/UploadDropzone";
 import { UploadProgress } from "@/components/documents/UploadProgress";
 import { validateFile } from "@/lib/files";
 import { isAbortError } from "@/services/api";
-import { listDocuments, uploadDocument } from "@/services/documents";
+import {
+  deleteDocument,
+  listDocuments,
+  uploadDocument,
+} from "@/services/documents";
 import type { DocumentRecord } from "@/types/documents";
 
 const UPLOAD_INPUT_ID = "document-upload-input";
 const POLL_INTERVAL_MS = 2000;
+const SEARCH_DEBOUNCE_MS = 300;
 
 type UploadState =
   | { status: "idle" }
@@ -79,24 +86,43 @@ function Notice({
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [upload, setUpload] = useState<UploadState>({ status: "idle" });
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState<{
+    tone: NoticeTone;
+    message: string;
+  } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
+
+  // Debounce so each keystroke does not trigger its own request.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const trimmed = searchInput.trim();
+      setQuery((current) => (current === trimmed ? current : trimmed));
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
 
-    listDocuments(controller.signal)
+    listDocuments(controller.signal, { query })
       .then((response) => {
         if (!active) {
           return;
         }
 
         setDocuments(response.items);
+        setTotal(response.total);
         setListError(null);
       })
       .catch((error: unknown) => {
@@ -119,7 +145,7 @@ export default function DocumentsPage() {
       active = false;
       controller.abort();
     };
-  }, [refreshToken]);
+  }, [refreshToken, query]);
 
   const hasActiveDocuments = documents.some(
     (document) =>
@@ -206,7 +232,41 @@ export default function DocumentsPage() {
     setRefreshToken((current) => current + 1);
   };
 
+  const handleDelete = (document: DocumentRecord) => {
+    setDeletingId(document.id);
+    setNotice(null);
+
+    deleteDocument(document.id)
+      .then(() => {
+        setDocuments((current) =>
+          current.filter((item) => item.id !== document.id),
+        );
+        setTotal((current) => Math.max(0, current - 1));
+        setNotice({
+          tone: "success",
+          message: `${document.original_filename} deleted.`,
+        });
+      })
+      .catch((error: unknown) => {
+        setNotice({ tone: "error", message: describeError(error) });
+      })
+      .finally(() => {
+        setDeletingId(null);
+      });
+  };
+
   const dismissUpload = () => setUpload({ status: "idle" });
+
+  let listDescription: string;
+  if (query) {
+    listDescription = `${documents.length} of ${total} uploaded ${
+      total === 1 ? "document matches" : "documents match"
+    } "${query}".`;
+  } else if (total > 0) {
+    listDescription = `${total} uploaded.`;
+  } else {
+    listDescription = "Uploads appear here with their status.";
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -281,11 +341,7 @@ export default function DocumentsPage() {
           <CardHeader className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>Your documents</CardTitle>
-              <CardDescription>
-                {documents.length > 0
-                  ? `${documents.length} uploaded`
-                  : "Uploads appear here with their status."}
-              </CardDescription>
+              <CardDescription>{listDescription}</CardDescription>
             </div>
             <Button
               variant="secondary"
@@ -301,6 +357,26 @@ export default function DocumentsPage() {
           </CardHeader>
 
           <CardBody className="flex flex-col gap-4">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search by filename..."
+                aria-label="Search documents by filename"
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </div>
+
+            {notice ? (
+              <Notice
+                tone={notice.tone}
+                message={notice.message}
+                onDismiss={() => setNotice(null)}
+              />
+            ) : null}
+
             {isLoading ? <Spinner label="Loading documents..." /> : null}
 
             {!isLoading && listError && documents.length === 0 ? (
@@ -324,7 +400,24 @@ export default function DocumentsPage() {
               </div>
             ) : null}
 
-            {!isLoading && !listError && documents.length === 0 ? (
+            {!isLoading && !listError && documents.length === 0 && query ? (
+              <EmptyState
+                icon={SearchX}
+                title="No matching documents"
+                description={`None of your filenames contain "${query}".`}
+                action={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSearchInput("")}
+                  >
+                    Clear search
+                  </Button>
+                }
+              />
+            ) : null}
+
+            {!isLoading && !listError && documents.length === 0 && !query ? (
               <EmptyState
                 icon={FileText}
                 title="No documents yet"
@@ -333,7 +426,11 @@ export default function DocumentsPage() {
             ) : null}
 
             {documents.length > 0 ? (
-              <DocumentList documents={documents} />
+              <DocumentList
+                documents={documents}
+                onDelete={handleDelete}
+                deletingId={deletingId}
+              />
             ) : null}
           </CardBody>
         </Card>

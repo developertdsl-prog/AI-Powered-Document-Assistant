@@ -3,17 +3,23 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import DocumentsPage from "@/pages/DocumentsPage";
-import { listDocuments, uploadDocument } from "@/services/documents";
+import {
+  deleteDocument,
+  listDocuments,
+  uploadDocument,
+} from "@/services/documents";
 import { ApiError } from "@/services/api";
 import type { DocumentRecord } from "@/types/documents";
 
 vi.mock("@/services/documents", () => ({
   listDocuments: vi.fn(),
   uploadDocument: vi.fn(),
+  deleteDocument: vi.fn(),
 }));
 
 const listDocumentsMock = vi.mocked(listDocuments);
 const uploadDocumentMock = vi.mocked(uploadDocument);
+const deleteDocumentMock = vi.mocked(deleteDocument);
 
 const readyDocument: DocumentRecord = {
   id: "doc-1",
@@ -45,6 +51,7 @@ function pdfFile(): File {
 beforeEach(() => {
   listDocumentsMock.mockReset();
   uploadDocumentMock.mockReset();
+  deleteDocumentMock.mockReset();
 });
 
 describe("DocumentsPage", () => {
@@ -154,5 +161,106 @@ describe("DocumentsPage", () => {
     expect(
       await screen.findByText(/no documents yet/i),
     ).toBeInTheDocument();
+  });
+
+  it("filters documents by filename with a debounced search", async () => {
+    const user = userEvent.setup();
+    listDocumentsMock.mockResolvedValue({ items: [readyDocument], total: 1 });
+
+    renderPage();
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText(/search documents by filename/i),
+      "note",
+    );
+
+    await waitFor(() =>
+      expect(listDocumentsMock).toHaveBeenLastCalledWith(
+        expect.any(AbortSignal),
+        { query: "note" },
+      ),
+    );
+    expect(
+      await screen.findByText(/1 of 1 uploaded document matches/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a no-match state and clears the search", async () => {
+    const user = userEvent.setup();
+    listDocumentsMock.mockImplementation((_signal, options) =>
+      Promise.resolve(
+        options?.query
+          ? { items: [], total: 0 }
+          : { items: [readyDocument], total: 1 },
+      ),
+    );
+
+    renderPage();
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText(/search documents by filename/i),
+      "zebra",
+    );
+
+    expect(
+      await screen.findByText(/no matching documents/i),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /clear search/i }));
+
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+  });
+
+  it("deletes a document after inline confirmation", async () => {
+    const user = userEvent.setup();
+    listDocumentsMock.mockResolvedValue({ items: [readyDocument], total: 1 });
+    deleteDocumentMock.mockResolvedValue({ message: "Document deleted." });
+
+    renderPage();
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete notes.txt" }));
+    await user.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+    expect(deleteDocumentMock).toHaveBeenCalledWith("doc-1");
+    expect(
+      await screen.findByText(/notes\.txt deleted\./i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("notes.txt")).not.toBeInTheDocument();
+  });
+
+  it("keeps the document when confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    listDocumentsMock.mockResolvedValue({ items: [readyDocument], total: 1 });
+
+    renderPage();
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete notes.txt" }));
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(deleteDocumentMock).not.toHaveBeenCalled();
+    expect(screen.getByText("notes.txt")).toBeInTheDocument();
+  });
+
+  it("shows an error and keeps the row when deletion fails", async () => {
+    const user = userEvent.setup();
+    listDocumentsMock.mockResolvedValue({ items: [readyDocument], total: 1 });
+    deleteDocumentMock.mockRejectedValue(
+      new ApiError("Document could not be deleted.", 500),
+    );
+
+    renderPage();
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete notes.txt" }));
+    await user.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+    expect(
+      await screen.findByText(/document could not be deleted/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("notes.txt")).toBeInTheDocument();
   });
 });

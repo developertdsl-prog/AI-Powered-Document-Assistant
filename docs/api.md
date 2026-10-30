@@ -155,6 +155,12 @@ List documents owned by the current user.
 | --- | --- | --- | --- |
 | `limit` | integer | `50` | `1` to `100` |
 | `offset` | integer | `0` | `>= 0` |
+| `q` | string | none | Case-insensitive substring the filename must contain; `422` above 200 characters |
+
+LIKE wildcards (`%`, `_`) in `q` are matched literally, so `q=50%` finds the
+filename `50%-discount.txt` and nothing else. `total` reflects the same
+filter, so pagination and match counts stay consistent. A blank `q` is
+ignored.
 
 **200 OK:**
 
@@ -184,6 +190,26 @@ Get one document owned by the current user.
 
 **404 Not Found** when the document does not exist or belongs to another
 user. The response uses the standard error envelope.
+
+### `DELETE /api/documents/{id}`
+
+Delete a document owned by the current user, together with its stored file,
+extracted pages, chunks, conversations, and messages. A failed upload can be
+cleaned up as easily as a ready one.
+
+**200 OK:**
+
+```json
+{ "message": "Document deleted." }
+```
+
+**Errors:** `404` when the document does not exist or belongs to another
+user; `422` for a malformed id.
+
+Deleting a document while its background processing is still running is
+allowed. The task re-reads the document and stops when it is gone; one
+already past that check fails on the missing rows without corrupting
+anything.
 
 ### `GET /api/documents/{id}/text`
 
@@ -629,7 +655,6 @@ These are contracts reserved for later phases and are **not implemented yet**.
 
 | Phase | Method | Path | Purpose |
 | --- | --- | --- | --- |
-| 2 | `DELETE` | `/api/documents/{id}` | Delete a document |
 | 5 | `POST` | `/api/auth/register` | Create an account |
 | 5 | `POST` | `/api/auth/login` | Obtain an access token |
 

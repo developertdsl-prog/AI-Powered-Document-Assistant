@@ -24,7 +24,7 @@ from app.core.exceptions import (
 from app.db.session import get_db
 from app.models import Document, User
 from app.schemas.answer import AnswerCitation, AnswerRequest, AnswerResponse
-from app.schemas.common import ErrorResponse
+from app.schemas.common import ErrorResponse, MessageResponse
 from app.schemas.document import (
     ChunkSearchRequest,
     ChunkSearchResponse,
@@ -90,6 +90,11 @@ def upload_document(
 def list_documents(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    q: str | None = Query(
+        default=None,
+        max_length=200,
+        description="Case-insensitive substring the filename must contain.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DocumentListResponse:
@@ -100,6 +105,7 @@ def list_documents(
         owner_id=current_user.id,
         limit=limit,
         offset=offset,
+        query=q,
     )
 
     return DocumentListResponse(
@@ -126,6 +132,37 @@ def get_document(
         owner_id=current_user.id,
         document_id=document_id,
     )
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=MessageResponse,
+    summary="Delete a document",
+    responses={
+        404: {"model": ErrorResponse, "description": "Document not found."},
+    },
+)
+def delete_document(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> MessageResponse:
+    """Delete a document together with its stored file and derived records.
+
+    Pages, chunks, conversations, and messages are removed with it, so a
+    failed upload can be cleaned up as easily as a ready one.
+    """
+
+    document = document_service.get_document(
+        db,
+        owner_id=current_user.id,
+        document_id=document_id,
+    )
+
+    document_service.delete_document(db, document=document, settings=settings)
+
+    return MessageResponse(message="Document deleted.")
 
 
 @router.get(
