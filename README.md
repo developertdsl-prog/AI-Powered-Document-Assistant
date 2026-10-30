@@ -4,9 +4,9 @@ Upload PDF, DOCX, and TXT documents, ask questions about their content, and get
 answers grounded in the source files with citations.
 
 This repository is built incrementally in six phases. The current state covers
-**Phase 3 - AI and retrieval pipeline**: chunking, embeddings, similarity
-search, and grounded answer generation. **Phase 4 - User-facing AI features**
-is next.
+**Phase 3 - AI and retrieval pipeline** together with **Phase 4.1 document
+chat** and **Phase 4.2 summaries and extraction**. **4.3 - Document library,
+search, and delete** is next.
 
 ## Status
 
@@ -23,8 +23,8 @@ is next.
 | 3.3 | Similarity search over embedded chunks | Complete |
 | 3.4 | Grounded answer generation with citations | Complete |
 | 4.1 | Document chat with cited answers and history | Complete |
-| 4.2 | Summaries and structured extractions | Next |
-| 4.3 | Search and delete | Planned |
+| 4.2 | Summaries and structured extractions | Complete |
+| 4.3 | Search and delete | Next |
 | 5 | Security, testing, reliability | Planned |
 | 6 | Deployment and delivery | Planned |
 
@@ -243,6 +243,7 @@ alembic current           # show the applied revision
 | `ANSWER_MIN_SIMILARITY` | `0.0` | Drop evidence below this cosine score; keep `0.0` with the offline hash embeddings, whose scores are not comparable |
 | `ANSWER_MAX_CONTEXT_CHARS` | `8000` | Character budget for the passages sent to the model |
 | `ANSWER_EXCERPT_CHARS` | `300` | Length of the `excerpt` returned with each citation |
+| `SUMMARY_MAX_CONTEXT_CHARS` | `12000` | Character budget for the passages sent to the summary and extraction endpoints |
 
 Never commit a real `.env` file. Only `.env.example` files belong in Git.
 

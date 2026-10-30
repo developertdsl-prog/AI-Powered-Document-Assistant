@@ -48,7 +48,7 @@ All non-2xx responses use one envelope:
 | 409 | `conflict` | State conflict (for example a duplicate email) |
 | 409 | `document_not_ready` | Extracted text was requested before processing finished |
 | 409 | `embeddings_unavailable` | Embeddings are disabled, so retrieval cannot run |
-| 409 | `answers_unavailable` | Answer generation is disabled on this server |
+| 409 | `answers_unavailable` | Answer, summary, or extraction generation is disabled on this server (`LLM_PROVIDER=none`) |
 | 413 | `file_too_large` | Upload exceeds the configured limit (Phase 2) |
 | 415 | `unsupported_media_type` | File type is not allowed (Phase 2) |
 | 422 | `validation_error` | Request body or query validation failed |
@@ -519,6 +519,110 @@ history unchanged.
 | 422 | `validation_error` | Blank or oversized question |
 | 503 | `service_unavailable` | The configured answer provider failed or is misconfigured |
 
+## Summaries and extraction
+
+Summarization and structured extraction for one ready document (Phase 4.2).
+Both read the document in order instead of retrieving, so they do not need
+embeddings and keep working while `EMBEDDING_PROVIDER=none`. Ownership and
+processing status are enforced exactly as for answers: another user's document
+returns `404`, and a document that is not `ready` returns `409`.
+
+Nothing is stored; every call generates a fresh result. The passages that fit
+`SUMMARY_MAX_CONTEXT_CHARS` (default `12000`) are used, so `truncated` reports
+that the document was longer than the budget.
+
+### `POST /api/documents/{id}/summaries`
+
+Summarize a ready document in reading order.
+
+**Request:**
+
+```json
+{
+  "length": "detailed"
+}
+```
+
+| Name | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `length` | string | `concise` | `concise` (a few sentences) or `detailed` (the main ideas in short paragraphs) |
+
+**200 OK:**
+
+```json
+{
+  "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "length": "concise",
+  "summary": "Refunds are issued within 14 days of purchase.",
+  "provider": "extractive",
+  "source_chunks": 2,
+  "truncated": false,
+  "generated_at": "2026-10-29T10:00:00Z"
+}
+```
+
+- `provider` is `extractive` for the offline provider that quotes the
+  document's opening sentences, or `openai` for a configured model.
+- `source_chunks` counts the passages used; a document without extractable
+  text returns a summary saying so with `source_chunks` `0`.
+
+**Errors:**
+
+| Status | Code | When |
+| --- | --- | --- |
+| 404 | `not_found` | Document does not exist or belongs to another user |
+| 409 | `document_not_ready` | Document is `pending`, `processing`, or `failed` |
+| 409 | `answers_unavailable` | `LLM_PROVIDER=none` disables generation |
+| 422 | `validation_error` | Unknown `length` value |
+| 503 | `service_unavailable` | The configured provider failed or is misconfigured |
+
+### `POST /api/documents/{id}/extractions`
+
+Extract key points, dates, names, and any custom fields from a ready document.
+
+**Request:**
+
+```json
+{
+  "fields": ["Invoice number", "Due date"],
+  "max_items": 10
+}
+```
+
+| Name | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `fields` | array | `[]` | Custom field names of 1 to 60 characters; at most 10, duplicates collapse, blank names are rejected |
+| `max_items` | integer | `10` | Items returned per collection (key points, dates, names), 1 to 25 |
+
+**200 OK:**
+
+```json
+{
+  "document_id": "9f9d7f23-0f4d-4fd0-b6f0-2d9f3ab90263",
+  "key_points": ["Refunds are issued within 14 days of purchase."],
+  "dates": ["March 3, 2026", "2026-04-01"],
+  "names": ["Acme Corp"],
+  "fields": [
+    { "name": "Invoice number", "value": "INV-2024-015", "found": true },
+    { "name": "Due date", "value": null, "found": false }
+  ],
+  "provider": "extractive",
+  "source_chunks": 2,
+  "truncated": false,
+  "generated_at": "2026-10-29T10:00:00Z"
+}
+```
+
+- Every requested field comes back in order with `found` `false` and `value`
+  `null` when the document does not contain it.
+- The offline provider quotes and pattern-matches the text (`name: value`
+  forms for fields), so it never invents a value. With a model provider the
+  reply must be one JSON object; anything else is reported as `503` instead of
+  returning an empty extraction.
+
+**Errors:** as for summaries, plus `422` for blank or oversized field names
+and a `max_items` outside 1-25.
+
 ## Planned endpoints
 
 These are contracts reserved for later phases and are **not implemented yet**.
@@ -526,8 +630,6 @@ These are contracts reserved for later phases and are **not implemented yet**.
 | Phase | Method | Path | Purpose |
 | --- | --- | --- | --- |
 | 2 | `DELETE` | `/api/documents/{id}` | Delete a document |
-| 4 | `POST` | `/api/documents/{id}/summaries` | Generate a summary |
-| 4 | `POST` | `/api/documents/{id}/extractions` | Extract structured fields |
 | 5 | `POST` | `/api/auth/register` | Create an account |
 | 5 | `POST` | `/api/auth/login` | Obtain an access token |
 
