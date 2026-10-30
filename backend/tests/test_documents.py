@@ -8,12 +8,19 @@ from uuid import UUID
 
 import pymupdf
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import Settings
-from app.models import Document, DocumentPage, User
+from app.models import (
+    Conversation,
+    Document,
+    DocumentChunk,
+    DocumentPage,
+    Message,
+    User,
+)
 from app.services.processing import process_document
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
@@ -425,3 +432,221 @@ def test_upload_schedules_background_processing(
 
     assert response.status_code == 201
     assert scheduled == [UUID(response.json()["id"])]
+
+
+# --- search ----------------------------------------------------------------
+
+
+def add_document(
+    db: Session,
+    user: User,
+    filename: str,
+    *,
+    status: str = "ready",
+) -> Document:
+    document = Document(
+        owner_id=user.id,
+        original_filename=filename,
+        storage_path=f"{user.id}/{filename}",
+        content_type="text/plain",
+        file_size_bytes=4,
+        status=status,
+    )
+    db.add(document)
+    db.commit()
+    return document
+
+
+def test_list_search_filters_by_filename_case_insensitively(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+) -> None:
+    add_document(db_session, user, "Refund Policy.pdf")
+    add_document(db_session, user, "meeting notes.txt")
+
+    response = client.get("/api/documents", params={"q": "REFUND"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert [item["original_filename"] for item in body["items"]] == [
+        "Refund Policy.pdf"
+    ]
+
+
+def test_list_search_with_no_match_returns_an_empty_page(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+) -> None:
+    add_document(db_session, user, "Refund Policy.pdf")
+
+    response = client.get("/api/documents", params={"q": "gorilla"})
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+
+
+def test_list_search_treats_wildcards_as_literal_text(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+) -> None:
+    add_document(db_session, user, "progress.txt")
+    add_document(db_session, user, "50%-discount.txt")
+
+    # Unescaped, "%" would match every filename; escaped it must match only
+    # the one that really contains the character.
+    wildcard = client.get("/api/documents", params={"q": "50%"})
+    assert wildcard.json()["total"] == 1
+    assert wildcard.json()["items"][0]["original_filename"] == "50%-discount.txt"
+
+    trailing = client.get("/api/documents", params={"q": "pro%"})
+    assert trailing.json() == {"items": [], "total": 0}
+
+
+def test_list_search_ignores_a_blank_query(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+) -> None:
+    add_document(db_session, user, "one.txt")
+    add_document(db_session, user, "two.txt")
+
+    response = client.get("/api/documents", params={"q": "   "})
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+
+
+def test_list_search_rejects_an_oversized_query(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/documents", params={"q": "x" * 201})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+# --- deletion --------------------------------------------------------------
+
+
+def test_delete_removes_the_document_and_its_stored_file(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+    app_settings: Settings,
+) -> None:
+    upload_response = upload(
+        client,
+        filename="delete-me.txt",
+        content=b"Temporary content.",
+        content_type="text/plain",
+    )
+    assert upload_response.status_code == 201
+    document_id = upload_response.json()["id"]
+
+    document = db_session.scalar(select(Document).where(Document.id == UUID(document_id)))
+    assert document is not None
+    stored_path = Path(app_settings.upload_dir) / document.storage_path
+    assert stored_path.is_file()
+
+    response = client.delete(f"/api/documents/{document_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Document deleted."}
+    assert stored_path.is_file() is False
+    assert (
+        db_session.scalar(select(func.count()).select_from(Document)) == 0
+    )
+    assert client.get(f"/api/documents/{document_id}").status_code == 404
+
+
+def test_delete_cascades_to_pages_chunks_and_conversations(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+    app_settings: Settings,
+) -> None:
+    document = add_document(db_session, user, "cascade.txt")
+    db_session.add(
+        DocumentPage(
+            document_id=document.id,
+            page_number=1,
+            content="Page text",
+            character_count=9,
+        )
+    )
+    db_session.add(
+        DocumentChunk(
+            document_id=document.id,
+            chunk_index=0,
+            content="Chunk text",
+        )
+    )
+    conversation = Conversation(owner_id=user.id, document_id=document.id, title="Q&A")
+    db_session.add(conversation)
+    db_session.flush()
+    db_session.add(
+        Message(
+            conversation_id=conversation.id,
+            role="user",
+            content="What is in it?",
+            position=1,
+        )
+    )
+    db_session.commit()
+
+    response = client.delete(f"/api/documents/{document.id}")
+
+    assert response.status_code == 200
+    assert db_session.scalar(select(func.count()).select_from(DocumentPage)) == 0
+    assert db_session.scalar(select(func.count()).select_from(DocumentChunk)) == 0
+    assert db_session.scalar(select(func.count()).select_from(Conversation)) == 0
+    assert db_session.scalar(select(func.count()).select_from(Message)) == 0
+
+
+def test_delete_works_for_a_failed_document(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+    app_settings: Settings,
+) -> None:
+    document = add_document(db_session, user, "broken.pdf", status="failed")
+
+    response = client.delete(f"/api/documents/{document.id}")
+
+    assert response.status_code == 200
+    assert (
+        db_session.scalar(select(func.count()).select_from(Document)) == 0
+    )
+
+
+def test_delete_hides_other_users_documents(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+    app_settings: Settings,
+) -> None:
+    other_user = User(email="delete-owner@example.com")
+    db_session.add(other_user)
+    db_session.flush()
+    document = add_document(db_session, other_user, "not-yours.txt")
+
+    response = client.delete(f"/api/documents/{document.id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+    assert (
+        db_session.scalar(select(func.count()).select_from(Document)) == 1
+    )
+
+
+def test_delete_rejects_an_invalid_document_id(
+    client: TestClient,
+) -> None:
+    response = client.delete("/api/documents/not-a-uuid")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
