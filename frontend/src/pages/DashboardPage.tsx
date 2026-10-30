@@ -1,70 +1,143 @@
-import { HealthStatusCard } from "@/components/HealthStatusCard";
-import { Button, Card, CardBody, CardDescription, CardHeader, CardTitle, EmptyState } from "@/components/ui";
-import type { ConversationSummary, DocumentSummary, StatCard } from "@/types";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { FileText, MessageSquare, Upload } from "lucide-react";
+import { HealthStatusCard } from "@/components/HealthStatusCard";
+import { DocumentStatusBadge } from "@/components/documents/DocumentStatusBadge";
+import {
+  Button,
+  Card,
+  CardBody,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  ErrorState,
+  Spinner,
+} from "@/components/ui";
+import {
+  documentTypeLabel,
+  formatFileSize,
+  formatUploadedAt,
+} from "@/lib/files";
+import { isAbortError } from "@/services/api";
+import { listConversations } from "@/services/conversations";
+import { listDocuments } from "@/services/documents";
+import type { ConversationRecord } from "@/types/conversations";
+import type { DocumentRecord } from "@/types/documents";
 
-const stats: StatCard[] = [
-  { label: "Documents", value: "3", hint: "2 ready · 1 processing" },
-  { label: "Conversations", value: "4", hint: "Across document and general chat" },
-  { label: "Summaries", value: "2", hint: "Generated this week" },
-];
+interface StatCard {
+  label: string;
+  value: string;
+  hint: string;
+}
 
-const recentDocuments: DocumentSummary[] = [
-  {
-    id: "doc-1",
-    title: "Quarterly Report Q4.pdf",
-    type: "PDF",
-    sizeLabel: "2.4 MB",
-    uploadedAt: "2026-10-23",
-    status: "ready",
-    pages: 24,
-  },
-  {
-    id: "doc-2",
-    title: "Product Requirements.docx",
-    type: "DOCX",
-    sizeLabel: "412 KB",
-    uploadedAt: "2026-10-22",
-    status: "ready",
-    pages: 9,
-  },
-  {
-    id: "doc-3",
-    title: "Meeting Notes.txt",
-    type: "TXT",
-    sizeLabel: "18 KB",
-    uploadedAt: "2026-10-23",
-    status: "processing",
-    pages: null,
-  },
-];
+const RECENT_LIMIT = 5;
 
-const recentConversations: ConversationSummary[] = [
-  {
-    id: "conv-1",
-    documentId: "doc-1",
-    title: "Q4 revenue breakdown",
-    lastActivityAt: "2026-10-23 09:42",
-    messageCount: 6,
-  },
-  {
-    id: "conv-2",
-    documentId: "doc-2",
-    title: "API authentication requirements",
-    lastActivityAt: "2026-10-22 16:18",
-    messageCount: 4,
-  },
-];
+const DOCUMENT_STATUSES = [
+  "ready",
+  "processing",
+  "pending",
+  "failed",
+] as const;
 
-const statusStyles: Record<DocumentSummary["status"], string> = {
-  ready:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  processing:
-    "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  error: "bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300",
-};
+function documentStatHint(documents: DocumentRecord[]): string {
+  if (documents.length === 0) {
+    return "Nothing uploaded yet";
+  }
+
+  const counts: Record<DocumentRecord["status"], number> = {
+    pending: 0,
+    processing: 0,
+    ready: 0,
+    failed: 0,
+  };
+  for (const document of documents) {
+    counts[document.status] += 1;
+  }
+
+  return DOCUMENT_STATUSES.filter((status) => counts[status] > 0)
+    .map((status) => `${counts[status]} ${status}`)
+    .join(" · ");
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : "Something went wrong.";
+}
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    Promise.all([
+      listDocuments(controller.signal),
+      listConversations(controller.signal),
+    ])
+      .then(([documentPage, conversationPage]) => {
+        if (!active) {
+          return;
+        }
+
+        setDocuments(documentPage.items);
+        setConversations(conversationPage.items);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (!active || isAbortError(error)) {
+          return;
+        }
+
+        setLoadError(describeError(error));
+      })
+      .finally(() => {
+        if (!active) {
+          return;
+        }
+
+        setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [reloadToken]);
+
+  const stats: StatCard[] = [
+    {
+      label: "Documents",
+      value: String(documents.length),
+      hint: documentStatHint(documents),
+    },
+    {
+      label: "Conversations",
+      value: String(conversations.length),
+      hint:
+        conversations.length === 0
+          ? "Start a chat from any ready document"
+          : "Across your document chats",
+    },
+    {
+      label: "Failed",
+      value: String(
+        documents.filter((document) => document.status === "failed").length,
+      ),
+      hint: documents.some((document) => document.status === "failed")
+        ? "Uploads that need attention"
+        : "No processing errors",
+    },
+  ];
+
+  const recentDocuments = documents.slice(0, RECENT_LIMIT);
+  const recentConversations = conversations.slice(0, RECENT_LIMIT);
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -73,123 +146,155 @@ export default function DashboardPage() {
             Dashboard
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Overview of your documents, conversations, and summaries.
+            Overview of your documents and conversations.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => navigate("/documents")}>
           <Upload className="h-4 w-4" />
           Upload document
         </Button>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardBody className="flex flex-col gap-1">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {stat.label}
-              </p>
-              <p className="text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                {stat.value}
-              </p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {stat.hint}
-              </p>
-            </CardBody>
-          </Card>
-        ))}
-      </section>
+      {isLoading ? <Spinner label="Loading dashboard..." /> : null}
 
-      <HealthStatusCard />
+      {!isLoading && loadError ? (
+        <div className="flex flex-col items-center gap-3">
+          <ErrorState
+            title="Couldn't load the dashboard"
+            description={loadError}
+          />
+          <Button
+            variant="secondary"
+            onClick={() => setReloadToken((current) => current + 1)}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent documents</CardTitle>
-            <CardDescription>
-              Track uploads and processing status from the library.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="flex flex-col gap-3">
-            {recentDocuments.map((document) => (
-              <div
-                key={document.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3 dark:border-slate-800"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {document.title}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {document.type} · {document.sizeLabel} ·{" "}
-                      {document.uploadedAt}
-                      {document.pages ? ` · ${document.pages} pages` : ""}
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${statusStyles[document.status]}`}
-                >
-                  {document.status}
-                </span>
-              </div>
+      {!isLoading && !loadError ? (
+        <>
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {stats.map((stat) => (
+              <Card key={stat.label}>
+                <CardBody className="flex flex-col gap-1">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {stat.label}
+                  </p>
+                  <p className="text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                    {stat.value}
+                  </p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {stat.hint}
+                  </p>
+                </CardBody>
+              </Card>
             ))}
-            {recentDocuments.length === 0 ? (
-              <EmptyState
-                title="No documents yet"
-                description="Upload a PDF, DOCX, or TXT file to get started."
-                action={<Button>Upload document</Button>}
-              />
-            ) : null}
-          </CardBody>
-        </Card>
+          </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent conversations</CardTitle>
-            <CardDescription>
-              Continue asking questions about your uploaded documents.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="flex flex-col gap-3">
-            {recentConversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3 dark:border-slate-800"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
-                    <MessageSquare className="h-5 w-5" />
+          <HealthStatusCard />
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent documents</CardTitle>
+                <CardDescription>
+                  Track uploads and processing status from the library.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="flex flex-col gap-3">
+                {recentDocuments.map((document) => (
+                  <div
+                    key={document.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3 dark:border-slate-800"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                          <Link
+                            to={`/documents/${document.id}`}
+                            className="rounded transition hover:text-sky-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:text-sky-300"
+                          >
+                            {document.original_filename}
+                          </Link>
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {documentTypeLabel(document.original_filename)} ·{" "}
+                          {formatFileSize(document.file_size_bytes)} ·{" "}
+                          {formatUploadedAt(document.created_at)}
+                          {document.page_count
+                            ? ` · ${document.page_count} pages`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <DocumentStatusBadge status={document.status} />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {conversation.title}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {conversation.messageCount} messages ·{" "}
-                      {conversation.lastActivityAt}
-                    </p>
+                ))}
+                {recentDocuments.length === 0 ? (
+                  <EmptyState
+                    title="No documents yet"
+                    description="Upload a PDF, DOCX, or TXT file to get started."
+                    action={
+                      <Button onClick={() => navigate("/documents")}>
+                        Upload document
+                      </Button>
+                    }
+                  />
+                ) : null}
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent conversations</CardTitle>
+                <CardDescription>
+                  Continue asking questions about your uploaded documents.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="flex flex-col gap-3">
+                {recentConversations.map((conversation) => (
+                  <div
+                    key={conversation.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3 dark:border-slate-800"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                        <MessageSquare className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {conversation.title}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Updated {formatUploadedAt(conversation.updated_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate("/chat")}
+                    >
+                      Resume
+                    </Button>
                   </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  Resume
-                </Button>
-              </div>
-            ))}
-            {recentConversations.length === 0 ? (
-              <EmptyState
-                icon={MessageSquare}
-                title="No conversations yet"
-                description="Open a document or start a new chat to begin."
-              />
-            ) : null}
-          </CardBody>
-        </Card>
-      </div>
+                ))}
+                {recentConversations.length === 0 ? (
+                  <EmptyState
+                    icon={MessageSquare}
+                    title="No conversations yet"
+                    description="Open a document or start a new chat to begin."
+                  />
+                ) : null}
+              </CardBody>
+            </Card>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
