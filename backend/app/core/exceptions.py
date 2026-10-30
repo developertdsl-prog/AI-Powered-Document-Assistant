@@ -144,3 +144,16 @@ class AnswerProviderError(AppError):
         ),
     ) -> None:
         super().__init__(message)
+
+
+class InsightProviderError(AppError):
+    status_code = 503
+    code = "service_unavailable"
+
+    def __init__(
+        self,
+        message: str = (
+            "The summary provider could not be reached. Try again shortly."
+        ),
+    ) -> None:
+        super().__init__(message)

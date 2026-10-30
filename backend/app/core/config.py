@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     answer_min_similarity: float = 0.0
     answer_max_context_chars: int = 8000
     answer_excerpt_chars: int = 300
+    # Summaries and extraction read the document in order instead of
+    # retrieving, so they get their own, larger budget for long documents.
+    summary_max_context_chars: int = 12000
 
     @property
     def is_development(self) -> bool:
