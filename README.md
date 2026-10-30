@@ -4,9 +4,10 @@ Upload PDF, DOCX, and TXT documents, ask questions about their content, and get
 answers grounded in the source files with citations.
 
 This repository is built incrementally in six phases. The current state covers
-**Phase 3 - AI and retrieval pipeline** together with **Phase 4.1 document
-chat** and **Phase 4.2 summaries and extraction**. **4.3 - Document library,
-search, and delete** is next.
+**Phase 3 - AI and retrieval pipeline** together with **Phase 4 - the
+document assistant UI**: document chat, summaries and extraction, and the
+document library with search and delete. **Phase 5 - security, testing, and
+reliability** is next.
 
 ## Status
 
@@ -24,8 +25,8 @@ search, and delete** is next.
 | 3.4 | Grounded answer generation with citations | Complete |
 | 4.1 | Document chat with cited answers and history | Complete |
 | 4.2 | Summaries and structured extractions | Complete |
-| 4.3 | Search and delete | Next |
-| 5 | Security, testing, reliability | Planned |
+| 4.3 | Search and delete | Complete |
+| 5 | Security, testing, reliability | Next |
 | 6 | Deployment and delivery | Planned |
 
 ## Technology stack

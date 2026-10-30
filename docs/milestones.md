@@ -21,7 +21,7 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 | Grounded answer generation | 3.4 | `13-grounded-answer-generation` | `dev` | `milestone-3.4-answers` |
 | Document chat | 4.1 | `14-document-chat` | `dev` | `milestone-4.1-chat` |
 | Summaries and extractions | 4.2 | `15-summaries-and-extractions` | `dev` | `milestone-4.2-summaries` |
-| Search and delete | 4.3 | _(planned)_ | `dev` | `milestone-4.3-search-delete` (planned) |
+| Search and delete | 4.3 | `16-search-and-delete` | `dev` | `milestone-4.3-search-delete` (planned) |
 | Security, testing, reliability | 5 | _(planned)_ | `dev` | `milestone-5-security-testing` (planned) |
 | Deployment and delivery | 6 | _(planned)_ | `dev` | `milestone-6-deployment` (planned) |
 
