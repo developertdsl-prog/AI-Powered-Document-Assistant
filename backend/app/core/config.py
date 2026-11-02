@@ -41,8 +41,18 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 20
     allowed_file_types: list[str] = ["pdf", "docx", "txt"]
-    dev_user_email: str = "dev@local.test"
-    dev_user_name: str = "Development User"
+    # Secret for signing JWTs. The default is fine for local development;
+    # production deployments must set their own so tokens cannot be forged.
+    jwt_secret_key: str = "dev-only-secret-change-me-please-32-bytes"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+    # Per-user limits for the expensive endpoints (uploads, answers,
+    # messages, summaries, extractions). Counters use fixed windows and live
+    # in process memory, which is fine for one backend process and noted for
+    # Phase 6.
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 60
+    rate_limit_window_seconds: int = 60
     process_uploads_in_background: bool = True
     chunk_size_chars: int = 1000
     chunk_overlap_chars: int = 150

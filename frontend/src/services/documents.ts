@@ -1,10 +1,11 @@
 import { apiBaseUrl } from "@/config/env";
+import { authHeaders, handleUnauthorized } from "@/lib/auth";
 import type {
   DocumentListResponse,
   DocumentRecord,
   DocumentTextResponse,
 } from "@/types/documents";
-import { ApiError } from "./api";
+import { ApiError, protectedApiError } from "./api";
 
 interface ErrorEnvelope {
   error?: {
@@ -56,6 +57,10 @@ export function uploadDocument(
     xhr.open("POST", `${apiBaseUrl}/api/documents`);
     xhr.responseType = "text";
 
+    for (const [name, value] of Object.entries(authHeaders())) {
+      xhr.setRequestHeader(name, value);
+    }
+
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         options.onProgress?.(
@@ -70,6 +75,10 @@ export function uploadDocument(
       if (xhr.status >= 200 && xhr.status < 300 && payload) {
         resolve(payload as DocumentRecord);
         return;
+      }
+
+      if (xhr.status === 401) {
+        handleUnauthorized();
       }
 
       reject(errorFromPayload(xhr.status, payload));
@@ -118,10 +127,11 @@ export async function listDocuments(
 
   const response = await fetch(`${apiBaseUrl}/api/documents?${params}`, {
     signal,
+    headers: authHeaders(),
   });
 
   if (!response.ok) {
-    throw await ApiError.fromResponse(response);
+    throw await protectedApiError(response);
   }
 
   return (await response.json()) as DocumentListResponse;
@@ -133,11 +143,11 @@ export async function deleteDocument(
 ): Promise<{ message: string }> {
   const response = await fetch(
     `${apiBaseUrl}/api/documents/${encodeURIComponent(documentId)}`,
-    { method: "DELETE", signal },
+    { method: "DELETE", signal, headers: authHeaders() },
   );
 
   if (!response.ok) {
-    throw await ApiError.fromResponse(response);
+    throw await protectedApiError(response);
   }
 
   return (await response.json()) as { message: string };
@@ -149,11 +159,11 @@ export async function getDocument(
 ): Promise<DocumentRecord> {
   const response = await fetch(
     `${apiBaseUrl}/api/documents/${encodeURIComponent(documentId)}`,
-    { signal },
+    { signal, headers: authHeaders() },
   );
 
   if (!response.ok) {
-    throw await ApiError.fromResponse(response);
+    throw await protectedApiError(response);
   }
 
   return (await response.json()) as DocumentRecord;
@@ -165,11 +175,11 @@ export async function getDocumentText(
 ): Promise<DocumentTextResponse> {
   const response = await fetch(
     `${apiBaseUrl}/api/documents/${encodeURIComponent(documentId)}/text`,
-    { signal },
+    { signal, headers: authHeaders() },
   );
 
   if (!response.ok) {
-    throw await ApiError.fromResponse(response);
+    throw await protectedApiError(response);
   }
 
   return (await response.json()) as DocumentTextResponse;

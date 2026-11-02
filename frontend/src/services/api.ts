@@ -1,3 +1,5 @@
+import { handleUnauthorized } from "@/lib/auth";
+
 interface ErrorEnvelope {
   error?: {
     code?: string;
@@ -31,6 +33,24 @@ export class ApiError extends Error {
       payload?.error?.code ?? "request_failed",
     );
   }
+}
+
+/**
+ * Build the error for a failed protected request.
+ *
+ * A 401 means the stored token was rejected (expired, revoked, or forged),
+ * so the local session is ended and the auth guard can redirect to login.
+ * Authentication endpoints build their errors with {@link ApiError}
+ * directly, because a failed login must not look like an expired session.
+ */
+export async function protectedApiError(response: Response): Promise<ApiError> {
+  const error = await ApiError.fromResponse(response);
+
+  if (error.status === 401) {
+    handleUnauthorized();
+  }
+
+  return error;
 }
 
 export function isAbortError(error: unknown): boolean {

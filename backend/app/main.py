@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import conversations, documents, health, insights
+from app.api.routes import auth, conversations, documents, health, insights
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 
@@ -35,6 +35,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health.router, prefix=settings.api_prefix, tags=["health"])
+    app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(documents.router, prefix=settings.api_prefix)
     app.include_router(conversations.router, prefix=settings.api_prefix)
     app.include_router(insights.router, prefix=settings.api_prefix)

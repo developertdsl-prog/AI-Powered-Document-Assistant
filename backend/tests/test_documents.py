@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.core.config import Settings
 from app.models import (
     Conversation,
@@ -301,19 +300,6 @@ def test_list_paginates_documents(
     body = response.json()
     assert body["total"] == 3
     assert len(body["items"]) == 2
-
-
-def test_development_user_is_created_once(db_session: Session) -> None:
-    settings = Settings(
-        dev_user_email="solo@example.com",
-        dev_user_name="Solo Tester",
-    )
-
-    first = get_current_user(db_session, settings)
-    second = get_current_user(db_session, settings)
-
-    assert first.id == second.id
-    assert first.email == "solo@example.com"
 
 
 def test_uploaded_pdf_can_be_processed_and_inspected(

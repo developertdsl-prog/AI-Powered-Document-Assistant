@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
-import { FileText, Home, MessageSquare, Sparkles } from "lucide-react";
+import { FileText, Home, LogOut, MessageSquare, Sparkles } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthContext";
+import { Button } from "@/components/ui";
 
 const navigation = [
   { name: "Dashboard", to: "/", icon: Home },
@@ -17,6 +19,8 @@ function linkClassName({ isActive }: { isActive: boolean }) {
 }
 
 export function Sidebar() {
+  const { user, logout } = useAuth();
+
   return (
     <aside className="hidden w-72 flex-col border-r border-slate-200 bg-white lg:flex dark:border-slate-800 dark:bg-slate-950">
       <div className="flex h-16 items-center gap-2 px-6">
@@ -28,7 +32,7 @@ export function Sidebar() {
             AI Document Assistant
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Phase 2
+            Document ingestion
           </p>
         </div>
       </div>
@@ -40,8 +44,26 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="border-t border-slate-200 px-6 py-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        Document ingestion
+      <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-4 dark:border-slate-800">
+        <div className="min-w-0 px-2">
+          <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+            {user?.full_name || user?.email}
+          </p>
+          {user?.full_name ? (
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+              {user.email}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={logout}
+          className="justify-start"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
       </div>
     </aside>
   );

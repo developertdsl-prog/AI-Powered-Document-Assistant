@@ -17,8 +17,8 @@ OpenAPI is generated automatically:
 | Identifiers | UUID v4 strings |
 | Timestamps | ISO 8601 with UTC timezone (`2026-10-23T09:42:00Z`) |
 | Field naming | `snake_case` in JSON |
-| Authentication | JWT bearer tokens, added in Phase 5 |
-| Document ownership | Every document record has `owner_id`; document and page queries are scoped to the current owner. JWT authentication arrives in Phase 5. |
+| Authentication | JWT bearer tokens: `POST /api/auth/register`, `POST /api/auth/login`, then `Authorization: Bearer <token>` on every protected request |
+| Document ownership | Every document record has `owner_id`; document, conversation, and insight queries are scoped to the user behind the bearer token |
 
 ## Error envelope
 
@@ -41,7 +41,7 @@ All non-2xx responses use one envelope:
 | HTTP | `code` | Meaning |
 | --- | --- | --- |
 | 400 | `bad_request` | Malformed request |
-| 401 | `unauthorized` | Missing or invalid credentials |
+| 401 | `unauthorized` | Missing, malformed, expired, or rejected credentials |
 | 403 | `forbidden` | Authenticated but not allowed |
 | 404 | `not_found` | Resource does not exist |
 | 405 | `method_not_allowed` | Method not supported for this path |
@@ -52,7 +52,7 @@ All non-2xx responses use one envelope:
 | 413 | `file_too_large` | Upload exceeds the configured limit (Phase 2) |
 | 415 | `unsupported_media_type` | File type is not allowed (Phase 2) |
 | 422 | `validation_error` | Request body or query validation failed |
-| 429 | `rate_limited` | AI or upload rate limit exceeded (Phase 5) |
+| 429 | `rate_limited` | Per-user rate limit exceeded on an upload or AI endpoint (see [Rate limits](#rate-limits)) |
 | 500 | `internal_error` | Unexpected server failure |
 | 503 | `service_unavailable` | A required dependency is unavailable |
 
@@ -74,6 +74,98 @@ Validation example (`422`):
   }
 }
 ```
+
+## Authentication
+
+Every endpoint except `GET /api/health`, `POST /api/auth/register`, and
+`POST /api/auth/login` requires a bearer token. Requests without one answer
+`401 unauthorized` in the standard envelope.
+
+### `POST /api/auth/register`
+
+Create an account.
+
+**Request:**
+
+```json
+{
+  "email": "ada@example.com",
+  "password": "correct-horse-battery",
+  "full_name": "Ada Lovelace"
+}
+```
+
+| Name | Type | Notes |
+| --- | --- | --- |
+| `email` | string | Required, 3 to 254 characters; trimmed and lowercased, must look like an address |
+| `password` | string | Required, 8 to 72 characters (the bcrypt input limit) |
+| `full_name` | string | Optional, at most 120 characters |
+
+**201 Created:**
+
+```json
+{
+  "id": "3f1c5f9c-3d0e-4a63-9d6f-2b0a1c6f9a11",
+  "email": "ada@example.com",
+  "full_name": "Ada Lovelace",
+  "created_at": "2026-11-02T09:42:00Z"
+}
+```
+
+Passwords are hashed with bcrypt and a per-password salt; the hash is never
+returned. Registration does not issue a token, so sign in afterwards.
+
+**Errors:** `409 conflict` when the email already exists,
+`422 validation_error` for an invalid email or a password outside 8-72
+characters.
+
+### `POST /api/auth/login`
+
+Exchange credentials for an access token.
+
+**Request:** `{ "email": "ada@example.com", "password": "correct-horse-battery" }`
+
+**200 OK:**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+The token is a signed JWT (`JWT_ALGORITHM`, default `HS256`) whose `sub` claim
+is the user id and whose `exp` claim is `ACCESS_TOKEN_EXPIRE_MINUTES` (default
+60) after issue. Send it as `Authorization: Bearer <token>`.
+
+**Errors:** `401 unauthorized` with the message `Incorrect email or password.`
+for a wrong password, an unknown email, or a disabled account - the same
+message for all three, so the endpoint cannot be used to enumerate accounts.
+
+### `GET /api/auth/me`
+
+Describe the account behind the request's token.
+
+**200 OK:** the same user object as registration.
+
+**Errors:** `401 unauthorized` for a missing, malformed, expired, or
+wrong-secret token, and for a token whose account was deleted or disabled.
+
+## Rate limits
+
+Upload and AI endpoints count requests per user in a fixed window
+(`RATE_LIMIT_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS`, defaults 60 per 60
+seconds) and answer `429 rate_limited` when the window's allowance is used up:
+
+- `upload` bucket: `POST /api/documents`
+- `ai` bucket: `POST /api/documents/{id}/search`,
+  `POST /api/documents/{id}/answers`, `POST /api/conversations/{id}/messages`,
+  `POST /api/documents/{id}/summaries`, `POST /api/documents/{id}/extractions`
+
+The buckets are separate, so a burst of uploads does not consume the allowance
+for questions. Counters live in process memory, which is correct for one
+backend process; a shared store is a Phase 6 concern. Set
+`RATE_LIMIT_ENABLED=false` to turn the limits off.
 
 ## Implemented endpoints
 
@@ -142,8 +234,8 @@ uses the form field `file`.
 | 415 | `unsupported_media_type` | Unsupported extension, mismatch between extension and content, or invalid file structure |
 | 422 | `validation_error` | Missing file, empty file, or path traversal resulted in an invalid filename |
 
-Until Phase 5 authentication, uploads are owned by the development user
-(`DEV_USER_EMAIL` / `DEV_USER_NAME`).
+All protected endpoints require a bearer token; the document is stored under
+the authenticated owner's directory.
 
 ### `GET /api/documents`
 
@@ -649,15 +741,6 @@ Extract key points, dates, names, and any custom fields from a ready document.
 **Errors:** as for summaries, plus `422` for blank or oversized field names
 and a `max_items` outside 1-25.
 
-## Planned endpoints
-
-These are contracts reserved for later phases and are **not implemented yet**.
-
-| Phase | Method | Path | Purpose |
-| --- | --- | --- | --- |
-| 5 | `POST` | `/api/auth/register` | Create an account |
-| 5 | `POST` | `/api/auth/login` | Obtain an access token |
-
 ## Data model
 
 ```text
@@ -696,11 +779,23 @@ cascades to its messages.
 
 `documents.storage_path` is stored relative to the configured upload directory
 and is not exposed to clients. `documents.checksum` is a SHA-256 hex digest
-computed at upload time. Upload ownership is enforced per user (currently the
-development user until Phase 5 authentication).
+computed at upload time. Upload ownership is enforced per user: the owner is
+the account behind the request's bearer token.
 
 ## Security notes
 
+- Passwords are stored as bcrypt hashes with a per-password salt and are never
+  returned by any endpoint. Login answers the same message for an unknown
+  email and a wrong password, so accounts cannot be enumerated.
+- Access tokens are signed JWTs. `JWT_SECRET_KEY` defaults to a development
+  value; production deployments must set their own random secret of at least 32
+  bytes, or anyone can forge a token for any user. Raising
+  `ACCESS_TOKEN_EXPIRE_MINUTES` lengthens how long a stolen token stays valid.
+- A token that names a deleted or disabled account is rejected with `401`.
+- Every document, conversation, and insight query filters by `owner_id` from
+  the token, so one account can never read another account's data.
+- Upload and AI endpoints are rate limited per user (`429 rate_limited`) to
+  bound abuse of the expensive paths.
 - Document text is untrusted data and must never override system instructions.
 - Retrieval must filter by `owner_id` before context is sent to an LLM.
 - Provider keys are backend-only environment variables and are never returned

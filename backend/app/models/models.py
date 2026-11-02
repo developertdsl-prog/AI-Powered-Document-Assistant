@@ -33,7 +33,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Application user. Authentication is implemented in Phase 5."""
+    """Application user with email and password credentials."""
 
     __tablename__ = "users"
 

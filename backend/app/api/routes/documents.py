@@ -21,6 +21,7 @@ from app.core.exceptions import (
     DocumentNotReadyError,
     EmbeddingsUnavailableError,
 )
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models import Document, User
 from app.schemas.answer import AnswerCitation, AnswerRequest, AnswerResponse
@@ -62,6 +63,7 @@ def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("upload")),
 ) -> Document:
     """Validate, store, and register an uploaded document."""
 
@@ -236,6 +238,7 @@ def search_document_chunks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> ChunkSearchResponse:
     """Embed the query and rank the document's chunks by cosine similarity."""
 
@@ -305,6 +308,7 @@ def answer_document_question(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> AnswerResponse:
     """Retrieve evidence for the question and answer from it only.
 
