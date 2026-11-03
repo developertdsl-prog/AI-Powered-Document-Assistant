@@ -12,6 +12,7 @@ from app.core.exceptions import (
     ConversationWithoutDocumentError,
     DocumentNotReadyError,
 )
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models import Conversation, User
 from app.schemas.answer import AnswerRequest
@@ -144,6 +145,7 @@ def create_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> MessageExchangeResponse:
     """Answer a question from the conversation's document and persist both turns.
 

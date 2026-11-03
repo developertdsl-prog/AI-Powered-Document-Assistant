@@ -26,6 +26,45 @@ class AppError(Exception):
         self.details = details
 
 
+class AuthenticationError(AppError):
+    status_code = 401
+    code = "unauthorized"
+
+    def __init__(
+        self,
+        message: str = (
+            "Authentication required or the token is invalid. "
+            "Log in to obtain a valid token."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
+class EmailTakenError(AppError):
+    status_code = 409
+    code = "conflict"
+
+    def __init__(
+        self,
+        message: str = "An account with this email already exists.",
+    ) -> None:
+        super().__init__(message)
+
+
+class RateLimitExceededError(AppError):
+    status_code = 429
+    code = "rate_limited"
+
+    def __init__(
+        self,
+        message: str = (
+            "Too many requests. Wait for the current window to pass "
+            "and try again."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
 class DocumentNotFoundError(AppError):
     status_code = 404
     code = "not_found"

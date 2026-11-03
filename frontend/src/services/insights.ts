@@ -1,20 +1,24 @@
 import { apiBaseUrl } from "@/config/env";
+import { authHeaders } from "@/lib/auth";
 import type {
   ExtractionOptions,
   ExtractionResponse,
   SummaryLength,
   SummaryResponse,
 } from "@/types/insights";
-import { ApiError } from "./api";
+import { protectedApiError } from "./api";
 
 async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, init);
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    ...init,
+    headers: { ...authHeaders(), ...init.headers },
+  });
 
   if (!response.ok) {
-    throw await ApiError.fromResponse(response);
+    throw await protectedApiError(response);
   }
 
   return (await response.json()) as T;

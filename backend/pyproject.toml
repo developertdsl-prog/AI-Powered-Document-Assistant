@@ -13,3 +13,4 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # FastAPI dependency injection uses call expressions in parameter defaults.
 "app/api/**/*.py" = ["B008"]
+"app/core/rate_limit.py" = ["B008"]

@@ -7,7 +7,8 @@ and are selected with ``EMBEDDING_PROVIDER``:
 - ``auto``    use OpenAI when ``OPENAI_API_KEY`` is set, otherwise the local
               deterministic hash provider (the development default).
 - ``openai``  OpenAI-compatible ``/v1/embeddings`` endpoint; fails when the
-              API key is missing.
+              API key is missing. Transient failures (timeouts, ``429``,
+              ``5xx``) are retried with exponential backoff.
 - ``hash``    local, offline, deterministic vectors for tests and development.
 - ``none``    skip embedding generation; chunks are stored without vectors.
 """
@@ -23,10 +24,14 @@ from typing import Protocol, runtime_checkable
 import httpx
 
 from app.core.config import EMBEDDING_DIMENSIONS, Settings
+from app.core.retry import request_with_retries
 
 logger = logging.getLogger(__name__)
 
 PROVIDER_CHOICES = ("auto", "openai", "hash", "none")
+
+MAX_RETRIES_DEFAULT = 2
+RETRY_BACKOFF_SECONDS_DEFAULT = 0.5
 
 
 class EmbeddingError(Exception):
@@ -101,6 +106,8 @@ class OpenAIEmbeddingProvider:
         dimensions: int = EMBEDDING_DIMENSIONS,
         batch_size: int = 100,
         timeout_seconds: float = 30.0,
+        max_retries: int = MAX_RETRIES_DEFAULT,
+        retry_backoff_seconds: float = RETRY_BACKOFF_SECONDS_DEFAULT,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         if not api_key:
@@ -116,6 +123,8 @@ class OpenAIEmbeddingProvider:
         self.batch_size = batch_size
         self._url = base_url.rstrip("/") + "/embeddings"
         self._timeout = timeout_seconds
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff_seconds
         self._transport = transport
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
@@ -138,10 +147,15 @@ class OpenAIEmbeddingProvider:
             body["dimensions"] = self.dimensions
 
         try:
-            response = client.post(
-                self._url,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                json=body,
+            response = request_with_retries(
+                lambda: client.post(
+                    self._url,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json=body,
+                ),
+                max_retries=self._max_retries,
+                backoff_seconds=self._retry_backoff,
+                operation="embedding request",
             )
         except httpx.HTTPError as exc:
             raise EmbeddingError("The embedding provider could not be reached.") from exc
@@ -206,4 +220,6 @@ def _openai_provider(settings: Settings) -> OpenAIEmbeddingProvider:
         base_url=settings.openai_base_url,
         batch_size=settings.embedding_batch_size,
         timeout_seconds=settings.embedding_timeout_seconds,
+        max_retries=settings.provider_max_retries,
+        retry_backoff_seconds=settings.provider_retry_backoff_seconds,
     )

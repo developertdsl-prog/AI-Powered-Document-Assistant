@@ -189,6 +189,9 @@ def test_openai_provider_reports_transport_errors() -> None:
         api_key="sk-test",
         model="text-embedding-3-small",
         base_url="https://embeddings.example/v1",
+        # The retry policy is covered in test_retries; here the client must
+        # surface the failure right away.
+        max_retries=0,
         transport=httpx.MockTransport(handler),
     )
 

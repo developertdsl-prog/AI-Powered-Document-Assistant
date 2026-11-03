@@ -62,6 +62,37 @@ Backend settings are defined in `backend/app/core/config.py` using
 Frontend configuration is limited to `VITE_*` variables, which are public by
 definition. No secret may be exposed through a `VITE_` variable.
 
+`JWT_SECRET_KEY` is the one secret that must differ per environment: it signs
+every access token, so a shared or committed value would let anyone forge one.
+
+## Authentication and authorization
+
+Authentication is stateless JWT bearer auth handled entirely in the backend:
+
+- `POST /api/auth/register` hashes the password with bcrypt
+  (`app/services/auth.py`) and stores it on `users.hashed_password`.
+- `POST /api/auth/login` verifies the hash and returns a signed token
+  (`sub` = user id, `exp` = `ACCESS_TOKEN_EXPIRE_MINUTES`).
+- `GET /api/auth/me` and every protected route resolve the caller through the
+  `get_current_user` dependency (`backend/app/api/deps.py`), which decodes the
+  token, loads the user, and rejects a missing, malformed, expired, or
+  unknown-account token with `401 unauthorized`.
+
+Ownership is then enforced in the same dependency chain: routes read
+`current_user.id` and every query filters on `owner_id`, so a valid token for
+one account can never reach another account's documents or conversations.
+
+The frontend keeps the token in `localStorage` (`frontend/src/lib/auth.ts`),
+attaches it in the service layer, and ends the session on any `401`
+(`protectedApiError` → `handleUnauthorized`). `AuthProvider` restores the
+session on load and `RequireAuth` guards the authenticated routes, sending
+anonymous visitors to `/login` with their intended destination preserved.
+
+Rate limiting (`backend/app/core/rate_limit.py`) counts requests per user and
+scope in process memory and raises `429` past `RATE_LIMIT_REQUESTS` within
+`RATE_LIMIT_WINDOW_SECONDS`. The counters are per backend process; a shared
+store belongs with the multi-process deployment in Phase 6.
+
 ## Error format
 
 Phase 1.1 establishes a single error envelope. It is documented and finalized in

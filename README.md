@@ -4,10 +4,11 @@ Upload PDF, DOCX, and TXT documents, ask questions about their content, and get
 answers grounded in the source files with citations.
 
 This repository is built incrementally in six phases. The current state covers
-**Phase 3 - AI and retrieval pipeline** together with **Phase 4 - the
-document assistant UI**: document chat, summaries and extraction, and the
-document library with search and delete. **Phase 5 - security, testing, and
-reliability** is next.
+**Phase 3 - AI and retrieval pipeline**, **Phase 4 - the document assistant
+UI** (document chat, summaries and extraction, and the document library with
+search and delete), and **Phase 5 - security, testing, and reliability**, which
+adds account sign-up/sign-in, per-user authorization, and rate limits.
+**Phase 6 - deployment and delivery** is next.
 
 ## Status
 
@@ -26,7 +27,7 @@ reliability** is next.
 | 4.1 | Document chat with cited answers and history | Complete |
 | 4.2 | Summaries and structured extractions | Complete |
 | 4.3 | Search and delete | Complete |
-| 5 | Security, testing, reliability | Next |
+| 5 | Security, testing, reliability | In progress |
 | 6 | Deployment and delivery | Planned |
 
 ## Technology stack
@@ -135,6 +136,31 @@ npm run dev
 
 The app is available at <http://localhost:5173>.
 
+### 4. First sign-in
+
+Every document belongs to an account, so create one the first time you open the
+app: <http://localhost:5173/register>. The form signs you in automatically and
+returns you to the page you requested. Signing out is available at the bottom
+of the sidebar.
+
+The same flow over HTTP:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register `
+  -ContentType "application/json" `
+  -Body '{"email":"you@example.com","password":"correct-horse-battery","full_name":"You"}'
+
+$token = (Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/login `
+  -ContentType "application/json" `
+  -Body '{"email":"you@example.com","password":"correct-horse-battery"}').access_token
+
+Invoke-RestMethod -Uri http://localhost:8000/api/documents `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+Send `Authorization: Bearer <token>` on every protected request; a missing or
+rejected token answers `401`.
+
 ## Verification
 
 ```powershell
@@ -172,7 +198,8 @@ push arrives, and every job has a timeout.
 - Stored files live under `backend/uploads/` by owner and are gitignored.
 - Supported types: `PDF`, `DOCX`, `TXT`. Validation inspects file content
   (magic bytes/ZIP structure) in addition to the extension.
-- Uploads are owned by the development user until Phase 5 authentication.
+- Uploads are owned by the signed-in user; every document, conversation, and
+  insight query is scoped to the owner behind the bearer token.
 - Uploaded documents are processed in the background by default. PDF pages keep
   their real page numbers, DOCX uses one logical page because DOCX has no fixed
   pagination, and TXT files split on form-feed characters.
@@ -225,8 +252,12 @@ alembic current           # show the applied revision
 | `UPLOAD_DIR` | `uploads` | Directory for stored uploads (relative to the backend working directory) |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Maximum upload size in megabytes |
 | `ALLOWED_FILE_TYPES` | `["pdf","docx","txt"]` | Allowed file extensions (JSON array) |
-| `DEV_USER_EMAIL` | `dev@local.test` | Development user email used until Phase 5 authentication |
-| `DEV_USER_NAME` | `Development User` | Display name for the development user |
+| `JWT_SECRET_KEY` | `dev-only-secret-change-me-please-32-bytes` | Secret that signs access tokens; production must set its own random value of at least 32 bytes |
+| `JWT_ALGORITHM` | `HS256` | Signing algorithm for access tokens |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Lifetime of an access token |
+| `RATE_LIMIT_ENABLED` | `true` | Set `false` to disable the per-user request limits |
+| `RATE_LIMIT_REQUESTS` | `60` | Requests allowed per user per window on upload and AI endpoints |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Length of the rate-limit window |
 | `PROCESS_UPLOADS_IN_BACKGROUND` | `true` | Parse uploads in a background task; set `false` to parse during the upload request |
 | `CHUNK_SIZE_CHARS` | `1000` | Target size of a retrieval chunk in characters |
 | `CHUNK_OVERLAP_CHARS` | `150` | Characters carried from one chunk into the next |

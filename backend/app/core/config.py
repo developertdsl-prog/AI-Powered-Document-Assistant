@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = "development"
     api_prefix: str = "/api"
+    # Structured logging: "plain" lines for development consoles, "json"
+    # for log collectors in production.
+    log_level: str = "INFO"
+    log_format: Literal["plain", "json"] = "plain"
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -41,14 +46,29 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 20
     allowed_file_types: list[str] = ["pdf", "docx", "txt"]
-    dev_user_email: str = "dev@local.test"
-    dev_user_name: str = "Development User"
+    # Secret for signing JWTs. The default is fine for local development;
+    # production deployments must set their own so tokens cannot be forged.
+    jwt_secret_key: str = "dev-only-secret-change-me-please-32-bytes"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+    # Per-user limits for the expensive endpoints (uploads, answers,
+    # messages, summaries, extractions). Counters use fixed windows and live
+    # in process memory, which is fine for one backend process and noted for
+    # Phase 6.
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 60
+    rate_limit_window_seconds: int = 60
     process_uploads_in_background: bool = True
     chunk_size_chars: int = 1000
     chunk_overlap_chars: int = 150
     embedding_provider: str = "auto"
     embedding_batch_size: int = 100
     embedding_timeout_seconds: float = 30.0
+    # Shared retry budget for the HTTP AI providers (chat and embeddings):
+    # transient failures (timeout, 429, 5xx) are retried with exponential
+    # backoff before the API reports 503.
+    provider_max_retries: int = 2
+    provider_retry_backoff_seconds: float = 0.5
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openai_embedding_model: str = "text-embedding-3-small"

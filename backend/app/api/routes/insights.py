@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import Settings, get_settings
 from app.core.exceptions import DocumentNotReadyError, InsightProviderError
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models import User
 from app.schemas.common import ErrorResponse
@@ -54,6 +55,7 @@ def generate_document_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> SummaryResponse:
     """Summarize a ready document in reading order.
 
@@ -103,6 +105,7 @@ def extract_document_insights(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> ExtractionResponse:
     """Extract key points, dates, names, and requested fields.
 

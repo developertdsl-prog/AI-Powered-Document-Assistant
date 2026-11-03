@@ -61,8 +61,7 @@ def app_settings(tmp_path: Path) -> Settings:
         upload_dir=str(tmp_path / "uploads"),
         max_upload_size_mb=1,
         allowed_file_types=["pdf", "docx", "txt"],
-        dev_user_email="tester@example.com",
-        dev_user_name="Tester",
+        jwt_secret_key="test-secret-key-at-least-32-bytes-long",
         process_uploads_in_background=False,
         # Pin the offline providers so tests never depend on an API key that
         # happens to be set in the developer's environment.
@@ -85,6 +84,30 @@ def client(
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_settings] = lambda: app_settings
+
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth_client(
+    db_session: Session,
+    app_settings: Settings,
+) -> Generator[TestClient, None, None]:
+    """Client that runs the real bearer-token authentication.
+
+    Only the database and settings are overridden, so registering, logging
+    in, and presenting a token exercise the production dependency chain.
+    """
+
+    def override_get_db() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_settings] = lambda: app_settings
 
     try:

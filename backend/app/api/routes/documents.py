@@ -21,6 +21,7 @@ from app.core.exceptions import (
     DocumentNotReadyError,
     EmbeddingsUnavailableError,
 )
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models import Document, User
 from app.schemas.answer import AnswerCitation, AnswerRequest, AnswerResponse
@@ -39,6 +40,7 @@ from app.services import documents as document_service
 from app.services import retrieval as retrieval_service
 from app.services.embeddings import get_embedding_provider
 from app.services.processing import process_document_in_background
+from app.services.usage import record_ai_call
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -62,6 +64,7 @@ def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("upload")),
 ) -> Document:
     """Validate, store, and register an uploaded document."""
 
@@ -236,6 +239,7 @@ def search_document_chunks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> ChunkSearchResponse:
     """Embed the query and rank the document's chunks by cosine similarity."""
 
@@ -252,7 +256,8 @@ def search_document_chunks(
     if provider is None:
         raise EmbeddingsUnavailableError()
 
-    (query_vector,) = provider.embed_texts([payload.query])
+    with record_ai_call("embedding", provider.name):
+        (query_vector,) = provider.embed_texts([payload.query])
 
     matches = retrieval_service.search_document_chunks(
         db,
@@ -305,6 +310,7 @@ def answer_document_question(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _rate_limit: None = Depends(rate_limit("ai")),
 ) -> AnswerResponse:
     """Retrieve evidence for the question and answer from it only.
 
