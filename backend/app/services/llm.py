@@ -8,9 +8,11 @@ speak chat messages at all.
 
 - keys are backend-only settings and never appear in a response;
 - requests run with ``temperature`` 0 so repeated questions are reproducible;
-- every failure mode (network, HTTP status, malformed payload, empty answer)
-  raises :class:`LLMError` so the API can answer with ``503`` instead of a
-  stack trace.
+- transient failures (timeouts, ``429``, ``5xx``) are retried with
+  exponential backoff (``PROVIDER_MAX_RETRIES``) before giving up;
+- every failure mode (network, HTTP status, malformed payload, empty
+  answer) raises :class:`LLMError` so the API can answer with ``503``
+  instead of a stack trace.
 """
 
 from __future__ import annotations
@@ -21,9 +23,12 @@ from typing import Protocol, runtime_checkable
 import httpx
 
 from app.core.config import Settings
+from app.core.retry import request_with_retries
 
 LLM_TIMEOUT_FALLBACK_SECONDS = 60.0
 LLM_MAX_TOKENS_DEFAULT = 700
+LLM_MAX_RETRIES_DEFAULT = 2
+LLM_RETRY_BACKOFF_SECONDS_DEFAULT = 0.5
 
 
 class LLMError(Exception):
@@ -54,6 +59,8 @@ class OpenAIChatProvider:
         base_url: str,
         timeout_seconds: float = LLM_TIMEOUT_FALLBACK_SECONDS,
         max_tokens: int = LLM_MAX_TOKENS_DEFAULT,
+        max_retries: int = LLM_MAX_RETRIES_DEFAULT,
+        retry_backoff_seconds: float = LLM_RETRY_BACKOFF_SECONDS_DEFAULT,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         if not api_key:
@@ -66,6 +73,8 @@ class OpenAIChatProvider:
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._timeout = timeout_seconds
         self._max_tokens = max_tokens
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff_seconds
         self._transport = transport
 
     def complete(self, messages: Sequence[dict[str, str]]) -> str:
@@ -82,10 +91,15 @@ class OpenAIChatProvider:
 
         with httpx.Client(transport=self._transport, timeout=self._timeout) as client:
             try:
-                response = client.post(
-                    self._url,
-                    headers={"Authorization": f"Bearer {self._api_key}"},
-                    json=body,
+                response = request_with_retries(
+                    lambda: client.post(
+                        self._url,
+                        headers={"Authorization": f"Bearer {self._api_key}"},
+                        json=body,
+                    ),
+                    max_retries=self._max_retries,
+                    backoff_seconds=self._retry_backoff,
+                    operation="chat completion",
                 )
             except httpx.HTTPError as exc:
                 raise LLMError("The answer provider could not be reached.") from exc
@@ -121,4 +135,6 @@ def get_chat_provider(settings: Settings) -> ChatProvider:
         base_url=settings.openai_base_url,
         timeout_seconds=settings.llm_timeout_seconds,
         max_tokens=settings.llm_max_tokens,
+        max_retries=settings.provider_max_retries,
+        retry_backoff_seconds=settings.provider_retry_backoff_seconds,
     )

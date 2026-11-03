@@ -40,6 +40,7 @@ from app.services import documents as document_service
 from app.services import retrieval as retrieval_service
 from app.services.embeddings import get_embedding_provider
 from app.services.processing import process_document_in_background
+from app.services.usage import record_ai_call
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -255,7 +256,8 @@ def search_document_chunks(
     if provider is None:
         raise EmbeddingsUnavailableError()
 
-    (query_vector,) = provider.embed_texts([payload.query])
+    with record_ai_call("embedding", provider.name):
+        (query_vector,) = provider.embed_texts([payload.query])
 
     matches = retrieval_service.search_document_chunks(
         db,

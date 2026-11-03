@@ -31,6 +31,7 @@ from app.models import Document, DocumentChunk
 from app.services.embeddings import get_embedding_provider
 from app.services.llm import LLMError, get_chat_provider
 from app.services.retrieval import search_document_chunks
+from app.services.usage import record_ai_call
 
 LLM_PROVIDER_CHOICES = ("auto", "openai", "extractive", "none")
 
@@ -336,17 +337,19 @@ def generate_answer(
         )
 
     if mode == "extractive":
-        text, cited = extractive_answer(question, evidence)
+        with record_ai_call("answer", mode):
+            text, cited = extractive_answer(question, evidence)
     else:
         provider = get_chat_provider(settings)
-        text = provider.complete(
-            build_messages(
-                question,
-                filename=document.original_filename,
-                evidence=evidence,
-                settings=settings,
+        with record_ai_call("answer", provider.name):
+            text = provider.complete(
+                build_messages(
+                    question,
+                    filename=document.original_filename,
+                    evidence=evidence,
+                    settings=settings,
+                )
             )
-        )
         cited = parse_citations(text, evidence)
         mode = provider.name
 
@@ -392,7 +395,8 @@ def answer_question(
             "on this server."
         )
 
-    (query_vector,) = embedding_provider.embed_texts([question])
+    with record_ai_call("embedding", embedding_provider.name):
+        (query_vector,) = embedding_provider.embed_texts([question])
 
     return generate_answer(
         db,

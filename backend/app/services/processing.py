@@ -16,6 +16,7 @@ from app.models import Document, DocumentChunk, DocumentPage
 from app.services.chunking import ChunkingError, chunk_pages
 from app.services.embeddings import EmbeddingError, get_embedding_provider
 from app.services.extraction import ExtractionError, extract_document
+from app.services.usage import record_ai_call
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,8 @@ def process_document(
             embeddings = [None] * len(chunks)
             embedding_name = None
         else:
-            vectors = provider.embed_texts([chunk.content for chunk in chunks])
+            with record_ai_call("embedding", provider.name):
+                vectors = provider.embed_texts([chunk.content for chunk in chunks])
             if len(vectors) != len(chunks):
                 raise EmbeddingError(
                     "The embedding provider returned "

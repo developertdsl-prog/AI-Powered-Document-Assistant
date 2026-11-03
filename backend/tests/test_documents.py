@@ -636,3 +636,65 @@ def test_delete_rejects_an_invalid_document_id(
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+# --- large files (Phase 5.3) -------------------------------------------------
+
+
+def test_large_text_document_is_chunked_searchable_and_answerable(
+    client: TestClient,
+    db_session: Session,
+    user: User,
+    app_settings: Settings,
+) -> None:
+    """A near-limit file uploads, processes into many chunks, and answers."""
+
+    paragraph = (
+        "The quarterly report covers revenue, costs, and headcount for the "
+        "period. Every figure in this section was reviewed by the finance "
+        "team beforehand. "
+    )
+    # ~400 KB: far above a single chunk, still below the1 MB test upload cap.
+    text = "\n\n".join(paragraph.strip() for _ in range(2700))
+
+    response = upload(
+        client,
+        filename="quarterly-report.txt",
+        content=text.encode("utf-8"),
+        content_type="text/plain",
+    )
+
+    assert response.status_code == 201, response.text
+    document_id = UUID(response.json()["id"])
+    assert response.json()["file_size_bytes"] > 300_000
+
+    processed = process_document(db_session, document_id, app_settings)
+    assert processed is not None
+    assert processed.status == "ready"
+
+    chunk_count = db_session.scalar(
+        select(func.count())
+        .select_from(DocumentChunk)
+        .where(DocumentChunk.document_id == document_id)
+    )
+    assert chunk_count is not None and chunk_count >= 300
+
+    search = client.post(
+        f"/api/documents/{document_id}/search",
+        json={"query": "quarterly report revenue", "limit": 10},
+    )
+    assert search.status_code == 200, search.text
+    results = search.json()["results"]
+    assert len(results) == 10
+    scores = [item["score"] for item in results]
+    assert scores == sorted(scores, reverse=True)
+    assert all("quarterly report" in item["content"] for item in results)
+
+    answer = client.post(
+        f"/api/documents/{document_id}/answers",
+        json={"question": "What does the quarterly report cover?"},
+    )
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["grounded"] is True
+    assert body["citations"]

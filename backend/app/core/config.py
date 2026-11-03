@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = "development"
     api_prefix: str = "/api"
+    # Structured logging: "plain" lines for development consoles, "json"
+    # for log collectors in production.
+    log_level: str = "INFO"
+    log_format: Literal["plain", "json"] = "plain"
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -59,6 +64,11 @@ class Settings(BaseSettings):
     embedding_provider: str = "auto"
     embedding_batch_size: int = 100
     embedding_timeout_seconds: float = 30.0
+    # Shared retry budget for the HTTP AI providers (chat and embeddings):
+    # transient failures (timeout, 429, 5xx) are retried with exponential
+    # backoff before the API reports 503.
+    provider_max_retries: int = 2
+    provider_retry_backoff_seconds: float = 0.5
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openai_embedding_model: str = "text-embedding-3-small"

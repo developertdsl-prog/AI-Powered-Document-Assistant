@@ -29,6 +29,7 @@ from app.core.exceptions import AnswersUnavailableError
 from app.models import Document, DocumentChunk
 from app.services.answers import get_answer_mode
 from app.services.llm import get_chat_provider
+from app.services.usage import record_ai_call
 
 SUMMARY_LENGTHS = ("concise", "detailed")
 
@@ -604,12 +605,14 @@ def generate_summary(
         )
 
     if mode == "extractive":
-        text = extractive_summary(context.passages, length=length)
+        with record_ai_call("summary", mode):
+            text = extractive_summary(context.passages, length=length)
     else:
         provider = get_chat_provider(settings)
-        text = provider.complete(
-            build_summary_messages(filename=filename, context=context, length=length)
-        )
+        with record_ai_call("summary", provider.name):
+            text = provider.complete(
+                build_summary_messages(filename=filename, context=context, length=length)
+            )
         mode = provider.name
 
     return SummaryResult(
@@ -648,13 +651,19 @@ def extract_insights(
         )
 
     if mode == "extractive":
-        parsed = extractive_insights(context.passages, fields=fields, max_items=max_items)
+        with record_ai_call("extraction", mode):
+            parsed = extractive_insights(
+                context.passages, fields=fields, max_items=max_items
+            )
     else:
         provider = get_chat_provider(settings)
-        raw = provider.complete(
-            build_extraction_messages(filename=filename, context=context, fields=fields)
-        )
-        parsed = parse_extraction(raw, fields=fields, max_items=max_items)
+        with record_ai_call("extraction", provider.name):
+            raw = provider.complete(
+                build_extraction_messages(
+                    filename=filename, context=context, fields=fields
+                )
+            )
+            parsed = parse_extraction(raw, fields=fields, max_items=max_items)
         mode = provider.name
 
     return _to_result(

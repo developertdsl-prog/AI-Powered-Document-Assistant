@@ -404,12 +404,15 @@ def test_openai_chat_provider_raises_on_an_http_error() -> None:
         api_key="test-key",
         model="test-model",
         base_url="https://example.test/v1",
+        # The retry policy is covered in test_retries; here the client must
+        # surface the status right away.
+        max_retries=0,
         transport=httpx.MockTransport(
             lambda _request: httpx.Response(500, json={})
         ),
     )
 
-    with pytest.raises(LLMError):
+    with pytest.raises(LLMError, match="HTTP 500"):
         provider.complete([{"role": "user", "content": "Question?"}])
 
 

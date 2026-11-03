@@ -3,15 +3,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, conversations, documents, health, insights
+from app.api.routes import auth, conversations, documents, health, insights, usage
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
+from app.core.logging import configure_logging
+from app.core.middleware import RequestLoggingMiddleware
 
 
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
 
     settings = get_settings()
+    configure_logging(settings)
 
     app = FastAPI(
         title=settings.app_name,
@@ -25,6 +28,8 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    app.add_middleware(RequestLoggingMiddleware)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -35,6 +40,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health.router, prefix=settings.api_prefix, tags=["health"])
+    app.include_router(usage.router, prefix=settings.api_prefix, tags=["usage"])
     app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(documents.router, prefix=settings.api_prefix)
     app.include_router(conversations.router, prefix=settings.api_prefix)
