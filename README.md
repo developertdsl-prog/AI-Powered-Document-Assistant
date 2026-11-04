@@ -8,7 +8,7 @@ This repository is built incrementally in six phases. The current state covers
 UI** (document chat, summaries and extraction, and the document library with
 search and delete), and **Phase 5 - security, testing, and reliability**, which
 adds account sign-up/sign-in, per-user authorization, and rate limits.
-**Phase 6 - deployment and delivery** is next.
+**Phase 6 - deployment and delivery** is in progress.
 
 ## Status
 
@@ -27,8 +27,8 @@ adds account sign-up/sign-in, per-user authorization, and rate limits.
 | 4.1 | Document chat with cited answers and history | Complete |
 | 4.2 | Summaries and structured extractions | Complete |
 | 4.3 | Search and delete | Complete |
-| 5 | Security, testing, reliability | In progress |
-| 6 | Deployment and delivery | Planned |
+| 5 | Security, testing, reliability | Complete |
+| 6 | Deployment and delivery | In progress |
 
 ## Technology stack
 
@@ -192,6 +192,28 @@ request into `dev` or `main` and on pushes to those branches:
 
 Runs for the same branch or pull request cancel automatically when a newer
 push arrives, and every job has a timeout.
+
+### Deployment with Docker Compose
+
+The whole stack (PostgreSQL with pgvector, the FastAPI backend, and the Vite
+frontend served by nginx) can be run locally with Docker Compose:
+
+```powershell
+docker compose up -d
+```
+
+Services:
+
+- `db` - PostgreSQL 16 with pgvector on `localhost:5433`
+- `backend` - FastAPI API on `localhost:8000` (OpenAPI at `/docs`)
+- `frontend` - SPA on `localhost:5173`, proxying `/api` to the backend
+
+The backend applies pending Alembic migrations on startup, so no separate
+migration step is needed. Point a browser at `http://localhost:5173` and
+register an account at `/register`.
+
+Environment variables follow the same `.env` conventions as local development;
+never commit a real `.env` file — only `.env.example` belongs in Git.
 
 ### Uploads and processing
 

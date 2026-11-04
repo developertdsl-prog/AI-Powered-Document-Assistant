@@ -22,7 +22,7 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 | Document chat | 4.1 | `14-document-chat` | `dev` | `milestone-4.1-chat` |
 | Summaries and extractions | 4.2 | `15-summaries-and-extractions` | `dev` | `milestone-4.2-summaries` |
 | Search and delete | 4.3 | `16-search-and-delete` | `dev` | `milestone-4.3-search-delete` |
-| Security, testing, reliability | 5 | `17-auth-security-testing` | `dev` | `milestone-5-security-testing` (planned) |
+| Security, testing, reliability | 5 | `17-auth-security-testing` | `dev` | `milestone-5-security-testing` |
 | Deployment and delivery | 6 | _(planned)_ | `dev` | `milestone-6-deployment` (planned) |
 
 On GitHub, Phases 1 and 2 are split into sub-milestones (1.1–1.3, 2.1–2.3),
