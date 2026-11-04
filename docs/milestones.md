@@ -23,7 +23,7 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 | Summaries and extractions | 4.2 | `15-summaries-and-extractions` | `dev` | `milestone-4.2-summaries` |
 | Search and delete | 4.3 | `16-search-and-delete` | `dev` | `milestone-4.3-search-delete` |
 | Security, testing, reliability | 5 | `17-auth-security-testing` | `dev` | `milestone-5-security-testing` (GitHub milestone closed) |
-| Deployment and delivery | 6 | _(planned)_ | `dev` | `milestone-6-deployment` (planned) |
+| Deployment and delivery | 6 | 6-deployment-and-delivery | `dev` | `milestone-6-deployment` |
 
 On GitHub, Phases 1 and 2 are split into sub-milestones (1.1–1.3, 2.1–2.3),
 while Phases 3–6 are each a single milestone. The git tags above stay per-merge

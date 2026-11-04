@@ -8,7 +8,7 @@ This repository is built incrementally in six phases. The current state covers
 UI** (document chat, summaries and extraction, and the document library with
 search and delete), and **Phase 5 - security, testing, and reliability**, which
 adds account sign-up/sign-in, per-user authorization, and rate limits.
-**Phase 6 - deployment and delivery** is in progress.
+**Phase 6 - deployment and delivery** is complete.
 
 ## Status
 
@@ -28,7 +28,7 @@ adds account sign-up/sign-in, per-user authorization, and rate limits.
 | 4.2 | Summaries and structured extractions | Complete |
 | 4.3 | Search and delete | Complete |
 | 5 | Security, testing, reliability | Complete |
-| 6 | Deployment and delivery | In progress |
+| 6 | Deployment and delivery | Complete |
 
 ## Technology stack
 
