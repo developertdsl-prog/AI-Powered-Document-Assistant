@@ -22,7 +22,7 @@ them: <https://github.com/developertdsl-prog/AI-Powered-Document-Assistant/miles
 | Document chat | 4.1 | `14-document-chat` | `dev` | `milestone-4.1-chat` |
 | Summaries and extractions | 4.2 | `15-summaries-and-extractions` | `dev` | `milestone-4.2-summaries` |
 | Search and delete | 4.3 | `16-search-and-delete` | `dev` | `milestone-4.3-search-delete` |
-| Security, testing, reliability | 5 | `17-auth-security-testing` | `dev` | `milestone-5-security-testing` |
+| Security, testing, reliability | 5 | `17-auth-security-testing` | `dev` | `milestone-5-security-testing` (GitHub milestone closed) |
 | Deployment and delivery | 6 | _(planned)_ | `dev` | `milestone-6-deployment` (planned) |
 
 On GitHub, Phases 1 and 2 are split into sub-milestones (1.1–1.3, 2.1–2.3),
@@ -38,7 +38,8 @@ tagged merge commit on `dev`.
 4. Open a pull request into `dev` linked to the issue and milestone.
 5. Merge the branch into `dev` with a merge commit.
 6. Tag the merge commit with the milestone tag and push the tag.
-7. Start the next branch from the updated `dev`.
+7. Close the GitHub milestone on GitHub.com (Issues → Milestones → milestone → Close milestone). Git tags and GitHub milestones are separate; pushing a tag does not close the GitHub milestone.
+8. Start the next branch from the updated `dev`.
 
 
  
